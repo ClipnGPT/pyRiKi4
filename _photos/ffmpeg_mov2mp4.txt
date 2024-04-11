@@ -1,0 +1,2 @@
+ffmpeg -i input.mov -ss 550 -t 120 output.mp4
+

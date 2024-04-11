@@ -1,0 +1,6 @@
+http://localhost/v5/sendkey_on.py
+
+http://localhost/v5/mic_off.py
+
+http://localhost/v5/cpu_off.py
+
