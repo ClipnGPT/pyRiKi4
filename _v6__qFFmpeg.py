@@ -901,7 +901,7 @@ class qCV2_class:
         try:
             #image = cv2.imread(inp_file)
             image = self.cv2imread(inp_file)
-            height, width, _ = image.shape
+            height, width = image.shape[:2]
             if (width > 1920):
                 height = int(height * (1920/width))
                 width  = 1920

@@ -10,38 +10,6 @@ REM CALL __setpath.bat
 
 ECHO;
 ECHO ----------
-ECHO 2023/04/16
-ECHO ----------
-ECHO Python==3.11.3
-ECHO setuptools==67.6.1
-ECHO pyinstaller==5.10.1
-ECHO numpy==1.24.2
-ECHO psutil==5.9.5
-ECHO websocket-client==1.1.0
-ECHO opencv-python==4.6.0.66
-ECHO opencv-contrib-python==4.6.0.66
-ECHO matplotlib==3.7.1
-ECHO pandas==2.0.0
-ECHO mojimoji==0.0.12
-
-ECHO;
-ECHO ----------
-ECHO 2024/01/27
-ECHO ----------
-ECHO Python==3.12.1
-ECHO setuptools==69.0.3
-ECHO pyinstaller==6.3.0
-ECHO numpy==1.26.3
-ECHO psutil==5.9.8
-ECHO websocket-client==1.7.0
-ECHO opencv-python==4.6.0.66
-ECHO opencv-contrib-python==4.6.0.66
-ECHO matplotlib==3.8.2
-ECHO pandas==2.2.0
-ECHO mojimoji==0.0.13
-
-ECHO;
-ECHO ----------
 ECHO 2024/02/12
 ECHO ----------
 ECHO Python==3.12.1
@@ -55,7 +23,22 @@ ECHO opencv-contrib-python==4.9.0.80
 ECHO pysimplegui==4.60.5
 ECHO matplotlib==3.8.2
 ECHO pandas==2.2.0
-ECHO mojimoji==0.0.13
+
+ECHO;
+ECHO ----------
+ECHO 2024/05/14
+ECHO ----------
+ECHO Python==3.12.3
+ECHO setuptools==69.5.1
+ECHO pyinstaller==6.6.0
+ECHO numpy==1.26.4
+ECHO psutil==5.9.8
+ECHO websocket-client==1.8.0
+ECHO opencv-python==4.9.0.80
+ECHO opencv-contrib-python==4.9.0.80
+ECHO pysimplegui==4.60.5
+ECHO matplotlib==3.8.4
+ECHO pandas==2.2.2
 
 ECHO;
 ECHO -----
@@ -65,7 +48,6 @@ rem           pip  install --upgrade pip
     python -m pip  install --upgrade pip
     python -m pip  install --upgrade wheel
     python -m pip  install --upgrade setuptools
-rem python -m pip  install --upgrade pyinstaller==6.1.0
     python -m pip  install --upgrade pyinstaller
 
 ECHO;
@@ -169,7 +151,7 @@ ECHO --------
     python -m pip  install --upgrade google-cloud-vision
     python -m pip  install --upgrade google-api-python-client
     python -m pip  install --upgrade gtts
-rem    python -m pip  install --upgrade googletrans
+rem python -m pip  install --upgrade googletrans
     python -m pip  install --upgrade goslate
     python -m pip  install --upgrade ggtrans
     python -m pip  uninstall -y gtts-token
