@@ -507,7 +507,7 @@ class proc_coreChat:
         reqText = ''
         inpText = proc_txt
         #print('input  :', inpText, )
-        res_txt, res_path, res_name, res_api, openaiAPI.history = openaiAPI.chatBot(
+        res_txt, res_path, res_files, res_name, res_api, openaiAPI.history = openaiAPI.chatBot(
                     session_id='0', history=openaiAPI.history, chat_class='chat',
                     sysText=sysText, reqText=reqText, inpText=inpText, filePath=[],
                     model_select='auto',

@@ -25,6 +25,8 @@ import json
 import socket
 qHOSTNAME = socket.gethostname().lower()
 
+import queue
+
 
 
 import _v6__qRiKi_key
@@ -34,6 +36,16 @@ qRiKi_key = _v6__qRiKi_key.qRiKi_key_class()
 
 # openai チャットボット
 import openai
+
+# https://medium.com/@hawkflow.ai/openai-streaming-assistants-example-77e53ca18fb4
+from typing_extensions import override
+from openai import AssistantEventHandler, OpenAI
+from openai.types.beta.threads import Text, TextDelta
+from openai.types.beta.threads.runs import ToolCall, ToolCallDelta
+from openai.types.beta.threads import Message, MessageDelta
+from openai.types.beta.threads.runs import ToolCall, RunStep
+from openai.types.beta import AssistantStreamEvent
+
 import tiktoken
 import speech_bot_openai_key  as openai_key
 
@@ -53,9 +65,241 @@ def base64_encode(file_path):
 
 
 
+class my_eventHandler(AssistantEventHandler):
+
+    def __init__(self, log_queue=None, my_seq=1, 
+                 my_client=None,
+                 my_assistant_id='', my_assistant_name='',
+                 my_thread_id='', 
+                 function_modules=[], res_history=[], 
+                 res_text='', res_path='', res_files=[], 
+                 upload_files=[], upload_flag=False, ):
+        
+        super().__init__()
+
+        self.log_queue          = log_queue
+        self.my_seq             = my_seq
+        self.my_client          = my_client
+        self.my_assistant_id    = my_assistant_id
+        self.my_assistant_name  = my_assistant_name
+        self.my_thread_id       = my_thread_id
+        self.my_run_id          = None
+        self.my_run_status      = None
+
+        self.function_modules   = function_modules
+        self.res_history        = res_history
+        self.res_text           = res_text
+        self.res_path           = res_path
+        self.res_files          = res_files
+        self.upload_files       = upload_files
+        self.upload_flag        = upload_flag
+
+    def print(self, text='', ):
+        print(text, flush=True)
+        if (self.log_queue is not None):
+            try:
+                t = text + '\n'
+                self.log_queue.put(['chatBot', t])
+            except:
+                pass
+
+    def stream(self, text='', ):
+        print(text, end='', flush=True)
+        if (self.log_queue is not None):
+            try:
+                #t = t.replace('\n', '<br>\n')
+                self.log_queue.put(['chatBot', text])
+            except:
+                pass
+
+    @override
+    def on_text_created(self, text) -> None:
+        self.print('')
+        
+    @override
+    def on_text_delta(self, delta, snapshot):
+        self.stream(f"{ delta.value }")
+        self.res_text += str(delta.value)
+
+    @override
+    def on_text_done(self, text):
+        self.stream('\n')
+        self.res_text += '\n'
+
+    @override
+    def on_end(self, ):
+        run = self.my_client.beta.threads.runs.retrieve(
+            thread_id=self.my_thread_id,
+            run_id=self.my_run_id, )
+        self.my_run_status = run.status
+
+    @override
+    def on_run_step_created(self, run_step: RunStep) -> None:
+        self.my_run_id = run_step.run_id
+
+    @override
+    def on_tool_call_created(self, tool_call):
+        if tool_call.type == 'code_interpreter':
+            self.print(f" Assistant : { tool_call.type }")
+        self.print('')
+
+    def on_tool_call_delta(self, delta, snapshot): 
+        if delta.type == 'code_interpreter':
+            #print(f"on_tool_call_delta > code_interpreter")
+            if delta.code_interpreter.input:
+                print(str(delta.code_interpreter.input), end="", flush=True)
+            if delta.code_interpreter.outputs:
+                for output in delta.code_interpreter.outputs:
+                    if output.type == "logs":
+                        self.print(f"\n{ output.logs }")
+
+    @override
+    def on_tool_call_done(self, tool_call: ToolCall) -> None:       
+        run = self.my_client.beta.threads.runs.retrieve(
+            thread_id=self.my_thread_id,
+            run_id=self.my_run_id, )
+        if run.status == "completed":
+            return
+        
+        elif run.status == "requires_action":
+            tool_result = []
+            #tool_call_id   = tool_call.id
+            #function_name  = tool_call.function.name
+            #json_kwargs    = tool_call.function.arguments
+
+            tool_calls = run.required_action.submit_tool_outputs.tool_calls
+            for t in range(len(tool_calls)):
+                tool_call_id  = tool_calls[t].id
+                function_name = tool_calls[t].function.name
+                json_kwargs   = tool_calls[t].function.arguments
+
+                hit = False
+                for module_dic in self.function_modules:
+                    if (function_name == module_dic['func_name']):
+                        hit = True
+                        self.print(f" Assistant :   function_call '{ module_dic['script'] }' ({  function_name })")
+                        self.print(f" Assistant :   → { json_kwargs }")
+
+                        # メッセージ追加格納
+                        self.my_seq += 1
+                        dic = {'seq': self.my_seq, 'time': time.time(), 'role': 'function_call', 'name': function_name, 'content': json_kwargs }
+                        self.res_history.append(dic)
+
+                        # function 実行
+                        try:
+                            ext_func_proc  = module_dic['func_proc']
+                            res_json       = ext_func_proc( json_kwargs )
+                        except Exception as e:
+                            print(e)
+                            # エラーメッセージ
+                            dic = {}
+                            dic['error'] = e 
+                            res_json = json.dumps(dic, ensure_ascii=False, )
+
+                        # メッセージ追加格納
+                        self.my_seq += 1
+                        dic = {'seq': self.my_seq, 'time': time.time(), 'role': 'function', 'name': function_name, 'content': res_json }
+                        self.res_history.append(dic)
+
+                        # パス情報確認
+                        try:
+                            dic  = json.loads(res_json)
+                            path = dic.get('image_path')
+                            if (path is not None):
+                                self.res_path = path
+                                self.res_files.append(path)
+                                self.upload_files.append(path)
+                                self.res_files    = list(set(self.res_files))
+                                self.upload_files = list(set(self.upload_files))
+
+                                # ファイルアップロード
+                                upload_ids = self.threadFile_set(upload_files   = self.upload_files,
+                                                                 assistant_id   = self.my_assistant_id,
+                                                                 assistant_name = self.my_assistant_name, )
+                                self.upload_flag = True
+
+                        except Exception as e:
+                            print(e)
+
+                if (hit == False):
+                    self.print(f" Assistant :   function_call Error ! ({ function_name })")
+                    self.print(json_kwargs, )
+
+                    dic = {}
+                    dic['result'] = 'error' 
+                    res_json = json.dumps(dic, ensure_ascii=False, )
+
+                # tool_result
+                self.print(f" Assistant :   → { res_json }")
+                self.print('')
+                tool_result.append({"tool_call_id": tool_call_id, "output": res_json})
+
+            # 結果通知
+            my_handler = my_eventHandler(log_queue=self.log_queue, my_seq=self.my_seq, 
+                                         my_client=self.my_client,
+                                         my_assistant_id=self.my_assistant_id, my_assistant_name=self.my_assistant_name, 
+                                         my_thread_id=self.my_thread_id,
+                                         function_modules=self.function_modules, res_history=self.res_history,
+                                         res_text=self.res_text, res_path=self.res_path, res_files=self.res_files, 
+                                         upload_files=self.upload_files, upload_flag=self.upload_flag, )
+            with self.my_client.beta.threads.runs.submit_tool_outputs_stream(
+                thread_id=self.my_thread_id,
+                run_id=self.my_run_id,
+                tool_outputs=tool_result,
+                event_handler=my_handler,
+                #stream=True,
+            ) as stream:
+                stream.until_done()
+            self.my_seq       = my_handler.my_seq
+            self.res_history  = my_handler.res_history
+            self.res_text     = my_handler.res_text
+            self.res_path     = my_handler.res_path
+            self.res_files    = my_handler.res_files
+            self.upload_files = my_handler.upload_files
+            self.upload_flag  = my_handler.upload_flag
+
+    def threadFile_set(self, upload_files=[], assistant_id=None, assistant_name='', ):
+        upload_ids = []
+
+        # # 2024/04/21時点 azure 未対応
+        # if (self.openai_api_type == 'azure'):
+        #    return upload_ids
+
+        for upload_file in upload_files:
+            base_name   = os.path.basename(upload_file)
+            work_name   = assistant_name + '_' + base_name
+            upload_work = qPath_chat_work + work_name
+            shutil.copy(upload_file, upload_work)
+
+            # 既に存在なら、置換えの為、削除
+            assistant_files_list = self.my_client.files.list()
+            for f in range(len(assistant_files_list.data)):
+                file_id   = assistant_files_list.data[f].id
+                file_name = assistant_files_list.data[f].filename
+                if (file_name == work_name):
+                    res = self.my_client.files.delete(
+                        file_id=file_id, )
+
+            # アップロード
+            upload = self.my_client.files.create(
+                file = open(upload_work, 'rb'),
+                purpose='assistants', )
+            upload_ids.append(upload.id)
+
+            self.print(f" Assistant : Upload ... { upload.id }, { base_name },")
+
+            # proc? wait
+            time.sleep(0.50)
+
+        return upload_ids
+
+
+
 class ChatBotAPI:
 
     def __init__(self, ):
+        self.log_queue              = None
+
         self.bot_auth               = None
         self.default_gpt            = 'auto'
         self.default_class          = 'auto'
@@ -125,6 +369,28 @@ class ChatBotAPI:
 
 
 
+    def init(self, log_queue=None, ):
+        self.log_queue = log_queue
+        return True
+
+    def print(self, text='', ):
+        print(text, flush=True)
+        if (self.log_queue is not None):
+            try:
+                t = text + '\n'
+                self.log_queue.put(['chatBot', t])
+            except:
+                pass
+
+    def stream(self, text='', ):
+        print(text, end='', flush=True)
+        if (self.log_queue is not None):
+            try:
+                #t = t.replace('\n', '<br>\n')
+                self.log_queue.put(['chatBot', text])
+            except:
+                pass
+
     def functions_load(self, functions_path='_extensions/openai_gpt/', secure_level='medium', ):
         self.last_input_class       = 'chat'
         self.last_chat_class        = 'chat'
@@ -136,7 +402,7 @@ class ChatBotAPI:
         res_load_all = True
         res_load_msg = ''
         self.functions_unload()
-        #print('Load functions ... ')
+        #self.print('Load functions ... ')
 
         path = functions_path
         path_files = glob.glob(path + '*.py')
@@ -148,13 +414,13 @@ class ChatBotAPI:
 
                     try:
                         file_name   = os.path.splitext(base_name)[0]
-                        print('Functions Loading ... "' + file_name + '" ...')
+                        self.print('Functions Loading ... "' + file_name + '" ...')
                         loader = importlib.machinery.SourceFileLoader(file_name, f)
                         ext_script = file_name
                         ext_module = loader.load_module()
                         ext_onoff  = 'off'
                         ext_class  = ext_module._class()
-                        print('Functions Loading ... "' + ext_script + '" (' + ext_class.func_name + ') _class.func_proc')
+                        self.print('Functions Loading ... "' + ext_script + '" (' + ext_class.func_name + ') _class.func_proc')
                         ext_version     = ext_class.version
                         ext_func_name   = ext_class.func_name
                         ext_func_ver    = ext_class.func_ver
@@ -162,7 +428,7 @@ class ChatBotAPI:
                         ext_function    = ext_class.function
                         ext_func_reset  = ext_class.func_reset
                         ext_func_proc   = ext_class.func_proc
-                        #print(ext_version, ext_func_auth, )
+                        #self.print(ext_version, ext_func_auth, )
 
                         # コード認証
                         auth = False
@@ -175,7 +441,7 @@ class ChatBotAPI:
                                 auth = qRiKi_key.decryptText(text=ext_func_auth)
                                 if  (auth != ext_func_name + '-' + ext_func_ver) \
                                 and (auth != self.openai_organization):
-                                    #print(ext_func_auth, auth)
+                                    #self.print(ext_func_auth, auth)
                                     if (secure_level == 'low'):
                                         auth = '1' #注意
                                         res_load_msg += '"' + ext_script + '"は改ざんされたコードです。(Warning!)' + '\n'
@@ -193,7 +459,7 @@ class ChatBotAPI:
                                 auth = qRiKi_key.decryptText(text=ext_func_auth)
                                 if  (auth != ext_func_name + '-' + ext_func_ver) \
                                 and (auth != self.openai_organization):
-                                    #print(ext_func_auth, auth)
+                                    #self.print(ext_func_auth, auth)
                                     res_load_msg += '"' + ext_script + '"は改ざんされたコードです。Loadingはキャンセルされます。' + '\n'
                                     res_load_all = False
                                 else:
@@ -229,13 +495,13 @@ class ChatBotAPI:
 
         res_reset_all = True
         res_reset_msg = ''
-        #print('Reset functions ... ')
+        #self.print('Reset functions ... ')
 
         for module_dic in self.function_modules:
             ext_script     = module_dic['script']
             ext_func_name  = module_dic['func_name']
             ext_func_reset = module_dic['func_reset']
-            print('Functions Reset  ...  "' + ext_script + '" (' + ext_func_name + ') _class.func_reset')
+            self.print('Functions Reset  ...  "' + ext_script + '" (' + ext_func_name + ') _class.func_reset')
             try:
                 res = False
                 res = ext_func_reset()
@@ -258,7 +524,7 @@ class ChatBotAPI:
 
         res_unload_all = True
         res_unload_msg = ''
-        #print('Unload functions ... ')
+        #self.print('Unload functions ... ')
 
         for module_dic in self.function_modules:
             ext_script     = module_dic['script']
@@ -266,7 +532,7 @@ class ChatBotAPI:
             ext_module    = module_dic['module']
             ext_class     = module_dic['class']
             ext_func_proc = module_dic['func_proc']
-            print('Functions Unload ...  "' + ext_script + '" (' + ext_func_name + ') _class.func_proc')
+            self.print('Functions Unload ...  "' + ext_script + '" (' + ext_func_name + ') _class.func_proc')
 
             try:
                 #del ext_func_proc
@@ -415,9 +681,9 @@ class ChatBotAPI:
                         self.openai_key_id       = openai_key_id
                         return True
 
-                    print('★Model nothing,', gpt_a_model1, gpt_b_model1)
+                    self.print(f"★Model nothing, { gpt_a_model1 }, { gpt_b_model1 },")
                     for dt in res['data']:
-                        print(dt['id'])
+                        self.print(dt['id'])
 
                     return False
 
@@ -636,11 +902,11 @@ class ChatBotAPI:
                 if (len_tokens > self.gpt_a_token2):
                     model = self.gpt_a_model3
                     max   = self.gpt_a_token3
-                    print(len_tokens, '->', model)
+                    self.print(f"tokens { len_tokens } -> { model } ")
                 elif (len_tokens > self.gpt_a_token1):
                     model = self.gpt_a_model2
                     max   = self.gpt_a_token2
-                    print(len_tokens, '->', model)
+                    self.print(f"tokens { len_tokens } -> { model } ")
                 if (len_tokens > max):
                     if (model_select == 'auto'):
                         if (self.gpt_b_enable == True):
@@ -652,11 +918,11 @@ class ChatBotAPI:
                 if (len_tokens > self.gpt_b_token2):
                     model = self.gpt_b_model3
                     max   = self.gpt_b_token3
-                    print(len_tokens, '->', model)
+                    self.print(f"tokens { len_tokens } -> { model } ")
                 elif (len_tokens > self.gpt_b_token1):
                     model = self.gpt_b_model2
                     max   = self.gpt_b_token2
-                    print(len_tokens, '->', model)
+                    self.print(f"tokens { len_tokens } -> { model } ")
 
             if (len_tokens > max):
                 nick_name = None
@@ -708,14 +974,14 @@ class ChatBotAPI:
         # チャットクラス判定
         if   (chat_class != 'auto'):
             self.last_input_class = chat_class
-            print(' ChatGPT :', 'user chat class = [', chat_class, ']')
+            self.print(f" ChatGPT : user chat class = [ { chat_class } ]")
 
         elif (self.gpt_a_model1 == self.gpt_b_model1) \
         and  (self.gpt_x_model1 == self.gpt_a_model1) \
         and  (self.gpt_x_model2 == self.gpt_b_model1):
             chat_class = 'chat'
             self.last_input_class = chat_class
-            print(' ChatGPT :', 'pass chat class = [', chat_class, ']')
+            self.print(f" ChatGPT : pass chat class = [ { chat_class } ]")
 
         else:
             # history 圧縮 (最後４つ残す)
@@ -777,7 +1043,7 @@ Please classify and respond using the designated words.
             wk_inpText += '----- 最後のユーザー入力 -----' + '\n'
             wk_inpText += inpText + '\n\n'
 
-            wk_json, wk_path, wk_nick_name, wk_model_name, wk_history = \
+            wk_json, wk_path, wk_files, wk_nick_name, wk_model_name, wk_history = \
                 self.run_gpt(chat_class='check', model_select='auto',
                              nick_name=None, model_name=None,
                              session_id='sys', history=[], 
@@ -789,7 +1055,7 @@ Please classify and respond using the designated words.
                 args_dic   = json.loads(wk_json)
                 chat_class = args_dic.get('chat_class')
             except:
-                print(wk_json)
+                self.print(wk_json)
             self.last_input_class = chat_class
 
             if  (chat_class != 'auto') \
@@ -799,10 +1065,10 @@ Please classify and respond using the designated words.
             and (chat_class != 'knowledge') \
             and (chat_class != 'chat') \
             and (chat_class != 'assistant'):
-                print(' ChatGPT :', 'auto chat class error !, [', chat_class, '] (' + wk_model_name + ')')
+                self.print(f" ChatGPT : auto chat class error !, [ { chat_class } ] ({ wk_model_name })")
                 chat_class = 'auto'
             else:
-                print(' ChatGPT :', 'auto chat class = [', chat_class, '] (' + wk_model_name + ')')
+                self.print(f" ChatGPT : auto chat class = [ { chat_class } ] ({ wk_model_name })")
 
         # model 指定
         user_select = None
@@ -857,7 +1123,7 @@ Please classify and respond using the designated words.
             if (chat_class == 'continue'):
                 chat_class   = self.last_chat_class
                 model_select = self.last_model_select
-                print(' ChatGPT :', 'continue chat class = [', chat_class, '],', model_select)
+                self.print(f" ChatGPT : continue chat class = [ { chat_class } ] ({ model_select })")
 
             if (chat_class == 'knowledge') \
             or (chat_class == 'code_interpreter') \
@@ -867,7 +1133,7 @@ Please classify and respond using the designated words.
                     model_select = 'x'
                     #if  (chat_class != 'knowledge') \
                     #and (chat_class != 'assistant'):
-                    #    print(' ChatGPT :', 'chat class auto change, [', chat_class, '] → [', 'assistant', ']')
+                    #    self.print(f" ChatGPT : chat class auto change [ { chat_class } ] → [ assistant ]")
                     #    chat_class == 'assistant'
                 else:
                     # 最後の要求
@@ -927,6 +1193,7 @@ Please classify and respond using the designated words.
         # 戻り値
         res_text    = ''
         res_path    = ''
+        res_files   = []
         res_history = history
 
         # model 指定
@@ -985,10 +1252,10 @@ Please classify and respond using the designated words.
             # トークン数チェック　→　モデル確定
             nick_name, model_name, len_tokens = self.checkTokens(messages=msg, functions=functions, model_select=model_select, )
             if (model_name is None):
-                print(' ChatGPT :', 'Token length over ! (' + str(len_tokens) + ')')
+                self.print(f" ChatGPT : Token length over ! ({ len_tokens })")
 
                 if (len(res_history) > 6):
-                    print(' ChatGPT :', 'History compress !')
+                    self.print(' ChatGPT : History compress !')
 
                     # history 圧縮 (最後４つ残す)
                     res_history = self.history_zip2(history=res_history, )
@@ -1003,7 +1270,7 @@ Please classify and respond using the designated words.
                     nick_name, model_name, len_tokens = self.checkTokens(messages=msg, functions=functions, model_select=model_select, )
 
             if (model_name is None):
-                print(' ChatGPT :', 'History reset !')
+                self.print(' ChatGPT : History reset !')
 
                 # history リセット
                 res_history = []
@@ -1020,12 +1287,12 @@ Please classify and respond using the designated words.
                 nick_name, model_name, len_tokens = self.checkTokens(messages=msg, functions=functions, model_select=model_select, )
 
             if (model_name is None):
-                print(' ChatGPT :', 'Token length Error ! (' + str(len_tokens) + ')')
-                return res_text, res_path, res_name, res_api, res_history
+                self.print(f" ChatGPT : Token length Error ! ({ len_tokens })")
+                return res_text, res_path, res_files, res_name, res_api, res_history
 
             # GPT
             n += 1
-            print(' ChatGPT :', model_name + ', pass=' + str(n) + ', tokens=' + str(len_tokens) + ', ')
+            self.print(f" ChatGPT : { model_name }, pass={ n }, tokens={ len_tokens }, ")
 
             # 結果
             res_role      = None
@@ -1176,7 +1443,7 @@ Please classify and respond using the designated words.
                         if (self.gpt_b_length != 0):
                             model_select = 'b'
 
-                print()
+                self.print()
                 for f in range(len(function_name)):
                     f_name   = function_name[f]
                     f_kwargs = json_kwargs[f]
@@ -1186,8 +1453,8 @@ Please classify and respond using the designated words.
                     for module_dic in self.function_modules:
                         if (f_name == module_dic['func_name']):
                             hit = True
-                            print(' ChatGPT :', '  function_call "' + module_dic['script'] + '" (' + f_name + ')')
-                            print(' ChatGPT :', '  →', f_kwargs)
+                            self.print(f" ChatGPT :   function_call '{ module_dic['script'] }' ({ f_name })")
+                            self.print(f" ChatGPT :   → { f_kwargs }")
 
                             # メッセージ追加格納
                             self.seq += 1
@@ -1206,8 +1473,8 @@ Please classify and respond using the designated words.
                                 res_json = json.dumps(dic, ensure_ascii=False, )
 
                             # tool_result
-                            print(' ChatGPT :', '  →', res_json)
-                            print()
+                            self.print(f" ChatGPT :   → { res_json }")
+                            self.print()
 
                             # メッセージ追加格納
                             dic = {'role': 'function', 'name': f_name, 'content': res_json }
@@ -1222,16 +1489,18 @@ Please classify and respond using the designated words.
                                 path = dic['image_path']
                                 if (path is not None):
                                     res_path = path
+                                    res_files.append(path)
+                                    res_files = list(set(res_files))
                             except:
                                 pass
 
                             break
 
                     if (hit == False):
-                        print(' ChatGPT :', '  function_call Error ! (' + f_name + ')')
+                        self.print(f" ChatGPT :   function_call Error ! ({ f_name })")
                         print(res_role, res_content, f_name, f_kwargs, )
                         try:
-                            print(completions)
+                            self.print(completions)
                         except:
                             pass
                         break
@@ -1239,7 +1508,7 @@ Please classify and respond using the designated words.
             # GPT 会話終了
             elif (res_role == 'assistant') and (res_content is not None):
                 function_name   = 'exit'
-                print(' ChatGPT :', nick_name.lower() + ' complite.')
+                self.print(f" ChatGPT : { nick_name.lower() } complite.")
 
                 # 自動で(B)モデル(GPT4)実行
                 if (model_select == 'auto') or (model_select == 'a'):
@@ -1248,7 +1517,7 @@ Please classify and respond using the designated words.
                             if (self.gpt_b_length != 0) and (len(res_text) >= self.gpt_b_length):
                                 nick_name2, model_name2, len_tokens = self.checkTokens(messages=msg, functions=[], model_select='b', )
                                 if (model_name2 is not None):
-                                    print(' ChatGPT :', nick_name2.lower() + ' start.')
+                                    self.print(f" ChatGPT : { nick_name2.lower() } start.")
 
                                     try:
                                         # OPENAI
@@ -1274,13 +1543,13 @@ Please classify and respond using the designated words.
                                             model       = model_name2
                                             res_role    = res_role2
                                             res_content = res_content2
-                                            print(' ChatGPT :', nick_name.lower() + ' complite.')
+                                            self.print(f" ChatGPT : { nick_name.lower() } complite.")
                                     except Exception as e:
                                         print(e)
-                                        print(' ChatGPT :', nick_name2.lower() + ' error!')
+                                        self.print(f" ChatGPT : { nick_name2.lower() } error!")
 
                 if (res_content is not None):
-                    #print(res_content.rstrip())
+                    #self.print(res_content.rstrip())
                     res_text += res_content.rstrip() + '\n'
 
                 # History 追加格納
@@ -1290,15 +1559,15 @@ Please classify and respond using the designated words.
 
             # 予期せぬ回答
             else:
-                print(' ChatGPT :', 'Error !')
-                print(' ChatGPT :', 'role =', res_role, ', content =', res_content, ', function_name =', function_name)
+                self.print(' ChatGPT : Error !')
+                self.print(f" ChatGPT : role={ res_role }, content={ res_content }, function_name={ function_name }")
                 try:
-                    print(completions)
+                    self.print(completions)
                 except:
                     pass
                 break
 
-        return res_text, res_path, nick_name, model_name, res_history
+        return res_text, res_path, res_files, nick_name, model_name, res_history
 
 
 
@@ -1320,7 +1589,7 @@ Please classify and respond using the designated words.
                 for f in range(len(vs_files.data)):
                     file_id   = vs_files.data[f].id
                     self.client_x.files.delete(file_id=file_id, )
-                print('  vector store delete!', vs_name)
+                self.print(f"  vector store delete! ('{ vs_name }')")
                 self.client_x.beta.vector_stores.delete(vector_store_id=vs_id)
 
                 break
@@ -1366,13 +1635,13 @@ Please classify and respond using the designated words.
                     for f in range(len(vs_files.data)):
                         file_id   = vs_files.data[f].id
                         self.client_x.files.delete(file_id=file_id, )
-                    print(' Assistant :', 'Delete vector store = "' + vs_name + '", ')
+                    self.print(f" Assistant : Delete vector store = '{ vs_name }', ")
                     self.client_x.beta.vector_stores.delete(vector_store_id=vs_id)
 
                 break
 
         # 転送不要
-        if (len(vectorStore_ids) > 0):
+        if (len(vectorStore_ids) == len(proc_files)):
             return vectorStore_ids
 
         # vector store 作成
@@ -1396,14 +1665,14 @@ Please classify and respond using the designated words.
                     #if (os.path.getsize(file_name) <= 20000000):
                     file = open(file_name, 'rb')
                     upload_files.append(file)
-                    print(' Assistant :', 'Upload file_name = "' + f + '", ')
+                    self.print(f" Assistant : Upload file_name = '{ f }',")
 
                     #try:
                     #    # アップロード
                     #    upload = self.client_x.files.create(
                     #                file    = file,
                     #                purpose = 'assistants', )
-                    #    print(' Assistant :', 'Upload file_name = "' + f + '", ' + upload.id)
+                    #    self.print(f" Assistant : Upload file_name = '{ f }', { upload.id }")
                     #    upload_ids.append(file)
                     #except Exception as e:
                     #    print(e)
@@ -1441,7 +1710,7 @@ Please classify and respond using the designated words.
                     # proc? wait
                     time.sleep(2.00 * len(upload_files))
 
-                    print(' Assistant :', file_batch.status)
+                    self.print(f" Assistant : { file_batch.status }")
 
                 except Exception as e:
                     print(e)
@@ -1453,18 +1722,16 @@ Please classify and respond using the designated words.
                 vs_id   = vector_stores.data[v].id
                 vs_name = vector_stores.data[v].name
                 if (vs_name == assistant_name):
-                    print(vs_name)
+                    self.print(vs_name)
                     vs_files = self.client_x.beta.vector_stores.files.list(vector_store_id=vs_id)
                     for f in range(len(vs_files.data)):
                         file_id   = vs_files.data[f].id
                         file_info = self.client_x.files.retrieve(
                             file_id=file_id, )
                         file_name = file_info.filename
-                        print(file_name)
+                        self.print(file_name)
 
         return vectorStore_ids
-
-
 
     def threadFile_del(self, assistant_id=None, assistant_name='', ):
 
@@ -1510,17 +1777,12 @@ Please classify and respond using the designated words.
             upload = self.client_x.files.create(
                 file = open(upload_work, 'rb'),
                 purpose='assistants', )
+            upload_ids.append(upload.id)
+
+            self.print(f" Assistant : Upload ... { upload.id }, { base_name },")
 
             # proc? wait
             time.sleep(0.50)
-
-            print(' Assistant :', 'Upload ...', upload.id, base_name, )
-
-            upload_ids.append(upload.id)
-
-        if (len(upload_files) > 0):
-            # proc? wait
-            time.sleep(2.00 * len(upload_files))
 
         return upload_ids
 
@@ -1535,13 +1797,110 @@ Please classify and respond using the designated words.
             try:
                 res = self.client_x.files.delete(
                     file_id=upload_id, )
-                print(' Assistant :', 'Delete ...', upload_id, )
+                self.print(f" Assistant : Delete ... { upload_id },")
             except:
                 pass
 
         return True
 
+    def my_assistant_update(self, my_assistant_id=None, my_assistant_name='',
+                            model_name='gpt-4o', instructions='', 
+                            functions=[], vectorStore_ids=[], upload_ids=[], ):
 
+        try:
+
+            # ツール設定
+            tools = [{"type": "code_interpreter"}]
+            if (len(vectorStore_ids) > 0):
+                tools.append({"type": "file_search"})
+            if (functions != []):
+                for f in range(len(functions)):
+                    tools.append({"type": "function", "function": functions[f]})
+            #self.print(tools)
+
+            # アシスタント取得
+            assistant = self.client_x.beta.assistants.retrieve(
+                assistant_id = my_assistant_id, )
+            try:
+                as_vector_ids = []
+                as_vector_ids = assistant.tool_resources.file_search.vector_store_ids
+            except:
+                pass
+            try:
+                as_file_ids   = []
+                as_file_ids   = assistant.tool_resources.code_interpreter.file_ids
+            except:
+                pass
+
+            # アシスタント更新
+            change_flag = False
+            if (model_name      != assistant.model):
+                change_flag = True
+                self.print(f" Assistant : Change model, { model_name },")
+            if (instructions    != assistant.instructions):
+                change_flag = True
+                self.print(f" Assistant : Change instructions ...")
+            if (len(tools)      != len(assistant.tools)):
+                change_flag = True
+                self.print(f" Assistant : Change tools ...")
+                #self.print(tools, )
+                #self.print(assistant.tools, )
+            if (vectorStore_ids != as_vector_ids):
+                change_flag = True
+                self.print(f" Assistant : Change vector store ids ...")
+            if (upload_ids      != as_file_ids):
+                change_flag = True
+                self.print(f" Assistant : Change file ids ...")
+
+            if (change_flag != True):
+                return False
+            else:
+                self.print(f" Assistant : Update assistant_name = '{ my_assistant_name }',")
+
+                # OPENAI
+                if (self.openai_api_type != 'azure'):
+
+                    assistant = self.client_x.beta.assistants.update(
+                                        assistant_id = my_assistant_id,
+                                        model        = model_name,
+                                        instructions = instructions,
+                                        tools        = tools,
+                                        timeout      = int(self.timeOut * 3),
+                                        tool_resources = {
+                                            "file_search": {
+                                                "vector_store_ids": vectorStore_ids
+                                                },
+                                            "code_interpreter": {
+                                                "file_ids": upload_ids
+                                                }
+                                            },
+                                    )
+
+                # Azure
+                else:
+
+                    assistant = self.client_x.beta.assistants.update(
+                                        assistant_id = my_assistant_id,
+                                        model        = model_name,
+                                        instructions = instructions,
+                                        tools        = tools,
+                                        timeout      = int(self.timeOut * 3),
+
+                                        # 2024/04/21時点 azure 未対応
+                                        #tool_resources = {
+                                        #    "file_search": {
+                                        #        "vector_store_ids": vectorStore_ids
+                                        #        },
+                                        #    "code_interpreter": {
+                                        #        "file_ids": upload_ids
+                                        #        }
+                                        #    },
+                                    )
+
+        except Exception as e:
+            print(e)
+            return False
+        return True
 
     def run_assistant(self, chat_class='assistant', model_select='auto',
                       nick_name=None, model_name=None,
@@ -1553,6 +1912,7 @@ Please classify and respond using the designated words.
         # 戻り値
         res_text    = ''
         res_path    = ''
+        res_files   = []
         if (nick_name  is None):
             nick_name   = self.gpt_x_nick_name
         if (model_name is None):
@@ -1625,7 +1985,7 @@ Please classify and respond using the designated words.
                     for a in range(self.max_assistant -1 , len(assistants.data)):
                         assistant = assistants.data[a]
                         if (assistant.name != my_assistant_name):
-                            print(' Assistant :', 'Delete assistant_name = "' + assistant.name + '",')
+                            self.print(f" Assistant : Delete assistant_name = '{ assistant.name }',")
 
                             # vector store 削除
                             res = self.vectorStore_del(assistant_id   = my_assistant_id, 
@@ -1639,7 +1999,7 @@ Please classify and respond using the designated words.
                             res = self.client_x.beta.assistants.delete(assistant_id = assistant.id, )
 
                 # アシスタント生成
-                print(' Assistant :', 'Create assistant_name = "' + my_assistant_name + '",')
+                self.print(f" Assistant : Create assistant_name = '{ my_assistant_name }',")
                 assistant = self.client_x.beta.assistants.create(
                     name     = my_assistant_name,
                     model    = model_name,
@@ -1650,113 +2010,37 @@ Please classify and respond using the designated words.
 
             # vector store 作成
             vectorStore_ids = self.vectorStore_set(retrievalFiles_path = '_extensions/retrieval_files/',
-                                                    assistant_id        = my_assistant_id, 
-                                                    assistant_name      = my_assistant_name, )
+                                                   assistant_id        = my_assistant_id, 
+                                                   assistant_name      = my_assistant_name, )
 
             # ファイルアップロード
             upload_ids = self.threadFile_set(upload_files   = upload_files,
-                                            assistant_id   = my_assistant_id,
-                                            assistant_name = my_assistant_name, )
-            #print("##", upload_ids, "##")
+                                             assistant_id   = my_assistant_id,
+                                             assistant_name = my_assistant_name, )
+            #self.print(f"##{ upload_ids }##")
+            # proc? wait
+            if (len(upload_files) > 0):
+                time.sleep(1.00 * len(upload_files))
 
             # アシスタント更新
             if (my_assistant_id is not None):
-
-                # ツール設定
-                tools = [{"type": "code_interpreter"}]
-                if (len(vectorStore_ids) > 0):
-                    tools.append({"type": "file_search"})
-                if (functions != []):
-                    for f in range(len(functions)):
-                        tools.append({"type": "function", "function": functions[f]})
-                #print(tools)
-
-                # アシスタント取得
-                assistant = self.client_x.beta.assistants.retrieve(
-                    assistant_id = my_assistant_id, )
-                try:
-                    as_vector_ids = []
-                    as_vector_ids = assistant.tool_resources.file_search.vector_store_ids
-                except:
-                    pass
-                try:
-                    as_file_ids   = []
-                    as_file_ids   = assistant.tool_resources.code_interpreter.file_ids
-                except:
-                    pass
-
-                # アシスタント更新
-                change_flag = False
-                if (model_name      != assistant.model):
-                    change_flag = True
-                    print(' Assistant :', 'Change model', model_name)
-                if (instructions    != assistant.instructions):
-                    change_flag = True
-                    print(' Assistant :', 'Change instructions ...')
-                if (len(tools)      != len(assistant.tools)):
-                    change_flag = True
-                    print(' Assistant :', 'Change tools ...')
-                    #print(tools, )
-                    #print(assistant.tools, )
-                if (vectorStore_ids != as_vector_ids):
-                    change_flag = True
-                    print(' Assistant :', 'Change vector store ids ...')
-                if (upload_ids      != as_file_ids):
-                    change_flag = True
-                    print(' Assistant :', 'Change file ids ...')
-                if (change_flag == True):
-                    print(' Assistant :', 'Update assistant_name = "' + my_assistant_name + '",')
-
-
-                    # OPENAI
-                    if (self.openai_api_type != 'azure'):
-
-                        assistant = self.client_x.beta.assistants.update(
-                                            assistant_id = my_assistant_id,
-                                            model        = model_name,
-                                            instructions = instructions,
-                                            tools        = tools,
-                                            timeout      = int(self.timeOut * 3),
-                                            tool_resources = {
-                                                "file_search": {
-                                                    "vector_store_ids": vectorStore_ids
-                                                    },
-                                                "code_interpreter": {
-                                                    "file_ids": upload_ids
-                                                    }
-                                                },
-                                        )
-
-                    # Azure
-                    else:
-
-                        assistant = self.client_x.beta.assistants.update(
-                                            assistant_id = my_assistant_id,
-                                            model        = model_name,
-                                            instructions = instructions,
-                                            tools        = tools,
-                                            timeout      = int(self.timeOut * 3),
-
-                                            # 2024/04/21時点 azure 未対応
-                                            #tool_resources = {
-                                            #    "file_search": {
-                                            #        "vector_store_ids": vectorStore_ids
-                                            #        },
-                                            #    "code_interpreter": {
-                                            #        "file_ids": upload_ids
-                                            #        }
-                                            #    },
-                                        )
-
-                    # update wait
-                    time.sleep(2.00)
+                res = self.my_assistant_update(my_assistant_id   = my_assistant_id,
+                                               my_assistant_name = my_assistant_name,
+                                               model_name        = model_name, 
+                                               instructions      = instructions, 
+                                               functions         = functions,
+                                               vectorStore_ids   = vectorStore_ids,
+                                               upload_ids        = upload_ids, )
+                # proc? wait
+                if (res == True):
+                    time.sleep(1.00)
 
         # スレッド確認
         my_thread_id = self.thread_id.get(str(session_id))
         if (my_thread_id is None):
 
             # スレッド生成
-            print(' Assistant :', 'Create thread (assistant_name) = "' + my_assistant_name + '",')
+            self.print(f" Assistant : Create thread (assistant_name) = '{ my_assistant_name }',")
             thread = self.client_x.beta.threads.create(
                 metadata = {'assistant_name': my_assistant_name}, )
             my_thread_id = thread.id
@@ -1776,7 +2060,7 @@ Please classify and respond using the designated words.
                             msg_text = 'message_history / (function ' + name + ' call)'  + '\n' + content
                         else:
                             msg_text = 'message_history / (function ' + name + ' result) ' + '\n' + content
-                    #print(msg_text)
+                    #self.print(msg_text)
                     res = self.client_x.beta.threads.messages.create(
                         thread_id = my_thread_id,
                         role      = 'user',
@@ -1789,256 +2073,320 @@ Please classify and respond using the designated words.
             content   = inpText, )
 
         # 実行開始
-        run = self.client_x.beta.threads.runs.create(
-            assistant_id = my_assistant_id,
-            thread_id    = my_thread_id, )
-        my_run_id = run.id
+        if (session_id == '0'):
+            # 初期化
+            my_handler = my_eventHandler(log_queue=self.log_queue, my_seq=self.seq,
+                                         my_client=self.client_x, 
+                                         my_assistant_id=my_assistant_id, my_assistant_name=my_assistant_name,
+                                         my_thread_id=my_thread_id,
+                                         function_modules=self.function_modules, res_history=res_history,
+                                         res_text=res_text, res_path=res_path, res_files=res_files, 
+                                         upload_files=upload_files, upload_flag=False, )
 
-        # 実行ループ
-        exit_status   = None
-        last_status   = None
-        last_step     = 0
-        messages = self.client_x.beta.threads.messages.list(
-                thread_id = my_thread_id, 
-                order     = 'asc', )
-        last_msg_step = len(messages.data) # First msg is request
-        last_message  = None
-        
-        chkTime       = time.time()
-        while (exit_status is None) and ((time.time() - chkTime) < (self.timeOut * 5)):
+            # 実行
+            with self.client_x.beta.threads.runs.stream(
+                assistant_id = my_assistant_id,
+                thread_id    = my_thread_id,
+                event_handler=my_handler,
+            ) as stream:
+                stream.until_done()
 
-            # ステータス
-            run = self.client_x.beta.threads.runs.retrieve(
-                thread_id = my_thread_id,
-                run_id    = my_run_id, )
-            if (run.status != last_status):
-                last_status = run.status
-                chkTime     = time.time()
-                print(' Assistant :', last_status)
+            self.seq     = my_handler.my_seq
+            res_history  = my_handler.res_history
+            res_text     = my_handler.res_text
+            res_path     = my_handler.res_path
+            res_files    = my_handler.res_files
+            upload_files = my_handler.upload_files
+            upload_flag  = my_handler.upload_flag
 
-            # 完了時は少し待機
-            if (last_status == 'completed'):
-                time.sleep(0.50)
+            if (upload_flag == True):
 
-            # 実行ステップ確認
-            time.sleep(0.25)
-            run_steps = self.client_x.beta.threads.runs.steps.list(
-                    thread_id = my_thread_id,
-                    run_id    = my_run_id,
-                    order     = 'asc', )
-            if (len(run_steps.data) > last_step):
-                for r in range(last_step, len(run_steps.data)):
-                    step_details_type = run_steps.data[r].step_details.type
-                    if (step_details_type != 'tool_calls'):
-                        print(' Assistant :', '(' + step_details_type + ')')
-                    else:
-                        #print(run_steps.data[r].step_details)
-                        step_details_tool_type = None
-                        try:
-                            step_details_tool_type = run_steps.data[r].step_details.tool_calls[0].type
-                        except:
-                            try:
-                                tc = run_steps.data[r].step_details.tool_calls[0]
-                                step_details_tool_type = tc.get('type')
-                            except:
-                                pass
-                        if (step_details_tool_type is not None):
-                            print(' Assistant :', '(' + step_details_tool_type + '...)')
-                        else:
-                            print(' Assistant :', '(' + step_details_type + ')')
+                # アシスタント更新
+                res = self.my_assistant_update(my_assistant_id   = my_assistant_id,
+                                               my_assistant_name = my_assistant_name,
+                                               model_name        = model_name, 
+                                               instructions      = instructions, 
+                                               functions         = functions,
+                                               vectorStore_ids   = vectorStore_ids,
+                                               upload_ids        = upload_ids, )
 
-                    if (step_details_type == 'message_creation'):
-                        message_id = run_steps.data[r].step_details.message_creation.message_id
-                        if (message_id is not None):
-                            messages = self.client_x.beta.threads.messages.retrieve(
-                                    thread_id  = my_thread_id, 
-                                    message_id = message_id, )
-                            for c in range(len(messages.content)):
-                                content_type = messages.content[c].type
-                                if (content_type == 'text'):
-                                    content_value = messages.content[c].text.value
-                                    if (content_value is not None) and (content_value != ''):
-                                        if (last_status != 'completed'):
-                                            if (content_value != last_message):
-                                                last_message = content_value 
-                                                print(last_message)
-                                                print()
+            # 終了待機
+            exit_status = my_handler.my_run_status
 
-                last_step = len(run_steps.data)
+        else:
+            # 実行開始
+            run = self.client_x.beta.threads.runs.create(
+                assistant_id = my_assistant_id,
+                thread_id    = my_thread_id, )
+            my_run_id = run.id
 
-            # 最大ステップ  10step x (3auto+1) / 2 = 20
-            limit_step = int((int(maxStep) * (int(self.auto_continue)+1)) / 2)
-            if (last_step > limit_step):
-                exit_status = 'overstep'
-                print(' Assistant :', 'overstep! (n=' + str(last_step) + '!)')
-                break
-
-            # 実行メッセージ確認
-            time.sleep(0.25)
+            # 実行ループ
+            exit_status   = None
+            last_status   = None
+            last_step     = 0
             messages = self.client_x.beta.threads.messages.list(
                     thread_id = my_thread_id, 
                     order     = 'asc', )
-            if (len(messages.data) > last_msg_step):
-                for m in range(last_msg_step, len(messages.data)):
+            last_msg_step = len(messages.data) # First msg is request
+            last_message  = None
+            
+            chkTime       = time.time()
+            while (exit_status is None) and ((time.time() - chkTime) < (self.timeOut * 5)):
 
-                    res_role = messages.data[m].role
-                    for c in range(len(messages.data[m].content)):
-                        content_type = messages.data[m].content[c].type
-                        if (content_type == 'image_file'):
-                            file_type   = content_type
-                            file_id     = messages.data[m].content[c].image_file.file_id
-                            if (file_id is not None):
-                                print(' Assistant :', '(', file_type, file_id, ')', )
+                # ステータス
+                run = self.client_x.beta.threads.runs.retrieve(
+                    thread_id = my_thread_id,
+                    run_id    = my_run_id, )
+                if (run.status != last_status):
+                    last_status = run.status
+                    chkTime     = time.time()
+                    self.print(f" Assistant : { last_status }")
 
-                        if (content_type == 'text'):
-                            content_value = messages.data[m].content[c].text.value
-                            if (content_value is not None) and (content_value != ''):
-                                last_msg_step = m
-                                if (last_status != 'completed'):
-                                    if (content_value != last_message):
-                                        last_message = content_value 
-                                        print(last_message)
-                                        print()
-                                else:
-                                    res_content  = content_value
-
-                            if (messages.data[m].content[c].text.annotations is not None):
-                                for a in range(len(messages.data[m].content[c].text.annotations)):
-                                    file_type = messages.data[m].content[c].text.annotations[a].type
-                                    file_text = messages.data[m].content[c].text.annotations[a].text
-                                    file_id   = None
-                                    try:
-                                        file_id = messages.data[m].content[c].text.annotations[a].file_path.file_id
-                                    except Exception as e:
-                                        pass
-                                        #print(messages.data[m].content[c].text.annotations[a])
-                                        #print(e)
-
-                                    #print(' Assistant :', file_type, file_text, file_id, )
-
-                                    try:
-                                        if (file_id is not None):
-
-                                            file_dic  = self.client_x.files.retrieve(file_id)
-                                            filename = os.path.basename(file_dic.filename)
-                                            content_file = self.client_x.files.content(file_id)
-                                            data_bytes   = content_file.read()
-                                            with open(qPath_output + filename, "wb") as file:
-                                                file.write(data_bytes)
-                                            print(' Assistant :', 'Download ...', file_text, )
-
-                                            download_hit = True
-                                    except:
-                                        pass
-
-            # 処理中
-            if   (last_status == 'in_progress') \
-            or   (last_status == 'queued') \
-            or   (last_status == 'cancelling'):
-                pass
-
-            # 終了
-            elif (last_status == 'completed') \
-            or   (last_status == 'cancelled') \
-            or   (last_status == 'failed') \
-            or   (last_status == 'expired'):
-                exit_status = last_status
-
-                # 正常終了
+                # 完了時は少し待機
                 if (last_status == 'completed'):
-                    break
+                    time.sleep(0.50)
 
-                # その他終了
-                else:
-                    print(' Assistant :', '!')
-                    break
-
-            # ファンクション
-            elif (last_status == 'requires_action'):
-                tool_result = []
-
-                print()
-                tool_calls = run.required_action.submit_tool_outputs.tool_calls
-                for t in range(len(tool_calls)):
-                    tool_call_id  = tool_calls[t].id
-                    function_name = tool_calls[t].function.name
-                    json_kwargs   = tool_calls[t].function.arguments
-
-                    hit = False
-                    for module_dic in self.function_modules:
-                        if (function_name == module_dic['func_name']):
-                            hit = True
-                            print(' Assistant :', '  function_call "' + module_dic['script'] + '" (' + function_name + ')')
-                            print(' Assistant :', '  →', json_kwargs)
-
-                            chkTime     = time.time()
-
-                            # メッセージ追加格納
-                            self.seq += 1
-                            dic = {'seq': self.seq, 'time': time.time(), 'role': 'function_call', 'name': function_name, 'content': json_kwargs }
-                            res_history.append(dic)
-
-                            # function 実行
+                # 実行ステップ確認
+                time.sleep(0.25)
+                run_steps = self.client_x.beta.threads.runs.steps.list(
+                        thread_id = my_thread_id,
+                        run_id    = my_run_id,
+                        order     = 'asc', )
+                if (len(run_steps.data) > last_step):
+                    for r in range(last_step, len(run_steps.data)):
+                        step_details_type = run_steps.data[r].step_details.type
+                        if (step_details_type != 'tool_calls'):
+                            self.print(f" Assistant : ({ step_details_type })")
+                        else:
+                            #self.print(run_steps.data[r].step_details)
+                            step_details_tool_type = None
                             try:
-                                ext_func_proc  = module_dic['func_proc']
-                                res_json       = ext_func_proc( json_kwargs )
-                            except Exception as e:
-                                print(e)
-                                # エラーメッセージ
-                                dic = {}
-                                dic['error'] = e 
-                                res_json = json.dumps(dic, ensure_ascii=False, )
-
-                            chkTime     = time.time()
-
-                            # メッセージ追加格納
-                            self.seq += 1
-                            dic = {'seq': self.seq, 'time': time.time(), 'role': 'function', 'name': function_name, 'content': res_json }
-                            res_history.append(dic)
-
-                            # パス情報確認
-                            try:
-                                dic  = json.loads(res_json)
-                                path = dic['image_path']
-                                if (path is not None):
-                                    res_path = path
+                                step_details_tool_type = run_steps.data[r].step_details.tool_calls[0].type
                             except:
-                                pass
+                                try:
+                                    tc = run_steps.data[r].step_details.tool_calls[0]
+                                    step_details_tool_type = tc.get('type')
+                                except:
+                                    pass
+                            if (step_details_tool_type is not None):
+                                self.print(f" Assistant : ({ step_details_tool_type }...)")
+                            else:
+                                self.print(f" Assistant : ({ step_details_type })")
 
-                    if (hit == False):
-                        print(' Assistant :', '  function_call Error ! (' + function_name + ')')
-                        print(json_kwargs, )
+                        if (step_details_type == 'message_creation'):
+                            message_id = run_steps.data[r].step_details.message_creation.message_id
+                            if (message_id is not None):
+                                messages = self.client_x.beta.threads.messages.retrieve(
+                                        thread_id  = my_thread_id, 
+                                        message_id = message_id, )
+                                for c in range(len(messages.content)):
+                                    content_type = messages.content[c].type
+                                    if (content_type == 'text'):
+                                        content_value = messages.content[c].text.value
+                                        if (content_value is not None) and (content_value != ''):
+                                            if (last_status != 'completed'):
+                                                if (content_value != last_message):
+                                                    last_message = content_value 
+                                                    self.print(last_message)
+                                                    self.print()
 
-                        dic = {}
-                        dic['result'] = 'error' 
-                        res_json = json.dumps(dic, ensure_ascii=False, )
+                    last_step = len(run_steps.data)
 
-                    # tool_result
-                    print(' Assistant :', '  →', res_json)
-                    print()
-                    tool_result.append({"tool_call_id": tool_call_id, "output": res_json})
+                # 最大ステップ  10step x (3auto+1) / 2 = 20
+                limit_step = int((int(maxStep) * (int(self.auto_continue)+1)) / 2)
+                if (last_step > limit_step):
+                    exit_status = 'overstep'
+                    self.print(f" Assistant : overstep! (n={ last_step }!)")
+                    break
 
-                # 結果通知
-                run = self.client_x.beta.threads.runs.submit_tool_outputs(
-                    thread_id    = my_thread_id,
-                    run_id       = my_run_id,
-                    tool_outputs = tool_result, )
+                # 実行メッセージ確認
+                time.sleep(0.25)
+                messages = self.client_x.beta.threads.messages.list(
+                        thread_id = my_thread_id, 
+                        order     = 'asc', )
+                if (len(messages.data) > last_msg_step):
+                    for m in range(last_msg_step, len(messages.data)):
 
-            else:
-                print(run)
-                print()
-                time.sleep(1)
+                        res_role = messages.data[m].role
+                        for c in range(len(messages.data[m].content)):
+                            content_type = messages.data[m].content[c].type
+                            if (content_type == 'image_file'):
+                                file_type   = content_type
+                                file_id     = messages.data[m].content[c].image_file.file_id
+                                if (file_id is not None):
+                                    self.print(f" Assistant : ( { file_type }, { file_id } )")
+
+                            if (content_type == 'text'):
+                                content_value = messages.data[m].content[c].text.value
+                                if (content_value is not None) and (content_value != ''):
+                                    last_msg_step = m
+                                    if (last_status != 'completed'):
+                                        if (content_value != last_message):
+                                            last_message = content_value 
+                                            self.print(last_message)
+                                            self.print()
+                                    else:
+                                        res_content  = content_value
+
+                                if (messages.data[m].content[c].text.annotations is not None):
+                                    for a in range(len(messages.data[m].content[c].text.annotations)):
+                                        file_type = messages.data[m].content[c].text.annotations[a].type
+                                        file_text = messages.data[m].content[c].text.annotations[a].text
+                                        file_id   = None
+                                        try:
+                                            file_id = messages.data[m].content[c].text.annotations[a].file_path.file_id
+                                        except Exception as e:
+                                            pass
+                                            #self.print(messages.data[m].content[c].text.annotations[a])
+                                            #print(e)
+
+                                        #self.print(' Assistant :', file_type, file_text, file_id, )
+
+                                        try:
+                                            if (file_id is not None):
+
+                                                file_dic  = self.client_x.files.retrieve(file_id)
+                                                filename = os.path.basename(file_dic.filename)
+                                                content_file = self.client_x.files.content(file_id)
+                                                data_bytes   = content_file.read()
+                                                with open(qPath_output + filename, "wb") as file:
+                                                    file.write(data_bytes)
+                                                self.print(f" Assistant : Download ... { file_text }")
+
+                                                download_hit = True
+                                        except:
+                                            pass
+
+                # 処理中
+                if   (last_status == 'in_progress') \
+                or   (last_status == 'queued') \
+                or   (last_status == 'cancelling'):
+                    pass
+
+                # 終了
+                elif (last_status == 'completed') \
+                or   (last_status == 'cancelled') \
+                or   (last_status == 'failed') \
+                or   (last_status == 'expired'):
+                    exit_status = last_status
+
+                    # 正常終了
+                    if (last_status == 'completed'):
+                        break
+
+                    # その他終了
+                    else:
+                        self.print(' Assistant : !')
+                        break
+
+                # ファンクション
+                elif (last_status == 'requires_action'):
+                    tool_result = []
+                    upload_flag = False
+
+                    self.print()
+                    tool_calls = run.required_action.submit_tool_outputs.tool_calls
+                    for t in range(len(tool_calls)):
+                        tool_call_id  = tool_calls[t].id
+                        function_name = tool_calls[t].function.name
+                        json_kwargs   = tool_calls[t].function.arguments
+
+                        hit = False
+                        for module_dic in self.function_modules:
+                            if (function_name == module_dic['func_name']):
+                                hit = True
+                                self.print(f" Assistant :   function_call '{ module_dic['script'] }' ({  function_name })")
+                                self.print(f" Assistant :   → { json_kwargs }")
+
+                                chkTime     = time.time()
+
+                                # メッセージ追加格納
+                                self.seq += 1
+                                dic = {'seq': self.seq, 'time': time.time(), 'role': 'function_call', 'name': function_name, 'content': json_kwargs }
+                                res_history.append(dic)
+
+                                # function 実行
+                                try:
+                                    ext_func_proc  = module_dic['func_proc']
+                                    res_json       = ext_func_proc( json_kwargs )
+                                except Exception as e:
+                                    print(e)
+                                    # エラーメッセージ
+                                    dic = {}
+                                    dic['error'] = e 
+                                    res_json = json.dumps(dic, ensure_ascii=False, )
+
+                                chkTime     = time.time()
+
+                                # メッセージ追加格納
+                                self.seq += 1
+                                dic = {'seq': self.seq, 'time': time.time(), 'role': 'function', 'name': function_name, 'content': res_json }
+                                res_history.append(dic)
+
+                                # パス情報確認
+                                try:
+                                    dic  = json.loads(res_json)
+                                    path = dic.get('image_path')
+                                    if (path is not None):
+                                        res_path = path
+                                        res_files.append(path)
+                                        upload_files.append(path)
+                                        res_files    = list(set(res_files))
+                                        upload_files = list(set(upload_files))
+
+                                        # ファイルアップロード
+                                        upload_ids = self.threadFile_set(upload_files   = upload_files,
+                                                                         assistant_id   = my_assistant_id,
+                                                                         assistant_name = my_assistant_name, )
+                                        upload_flag = True
+
+                                except Exception as e:
+                                    print(e)
+
+                        if (hit == False):
+                            self.print(f" Assistant :   function_call Error ! ({ function_name })")
+                            self.print(json_kwargs, )
+
+                            dic = {}
+                            dic['result'] = 'error' 
+                            res_json = json.dumps(dic, ensure_ascii=False, )
+
+                        # tool_result
+                        self.print(f" Assistant :   → { res_json }")
+                        self.print()
+                        tool_result.append({"tool_call_id": tool_call_id, "output": res_json})
+
+                    # 結果通知
+                    run = self.client_x.beta.threads.runs.submit_tool_outputs(
+                        thread_id    = my_thread_id,
+                        run_id       = my_run_id,
+                        tool_outputs = tool_result, )
+
+                    # アシスタント更新
+                    if (upload_flag == True):
+                        res = self.my_assistant_update(my_assistant_id   = my_assistant_id,
+                                                    my_assistant_name = my_assistant_name,
+                                                    model_name        = model_name, 
+                                                    instructions      = instructions, 
+                                                    functions         = functions,
+                                                    vectorStore_ids   = vectorStore_ids,
+                                                    upload_ids        = upload_ids, )
+
+                else:
+                    self.print(run)
+                    self.print()
+                    time.sleep(1)
 
         if (exit_status is None):
             exit_status = 'timeout'
-            print(' Assistant :', 'timeout! (' + str(self.timeOut * 5) + 's)')
+            self.print(f" Assistant : timeout! ({ str(self.timeOut * 5) }s)")
             #raise RuntimeError('assistant run timeout !')
             
         # 結果確認
         if (exit_status == 'completed'):
 
             if (res_content is not None):
-                #print(res_content.rstrip())
+                #self.print(res_content.rstrip())
                 res_text += res_content.rstrip() + '\n'
 
             if (download_hit == True):
@@ -2073,7 +2421,7 @@ Please classify and respond using the designated words.
                         run = self.client_x.beta.threads.runs.cancel(
                             thread_id = my_thread_id, 
                             run_id    = run_id, )
-                        print(' Assistant :', 'run cancel ...', run_id, )
+                        self.print(f" Assistant : run cancel ... { run_id }")
                     except:
                         pass
 
@@ -2085,7 +2433,7 @@ Please classify and respond using the designated words.
         self.work_assistant_id   = my_assistant_id
         self.work_assistant_name = my_assistant_name
 
-        return res_text, res_path, nick_name, model_name, res_history
+        return res_text, res_path, res_files, nick_name, model_name, res_history
 
     def auto_assistant(self, chat_class='chat', model_select='auto',
                       nick_name=None, model_name=None,
@@ -2097,6 +2445,7 @@ Please classify and respond using the designated words.
         # 戻り値
         res_text    = ''
         res_path    = ''
+        res_files   = []
         if (nick_name  is None):
             nick_name   = self.gpt_x_nick_name
         if (model_name is None):
@@ -2199,13 +2548,13 @@ Respond according to the following criteria:
 
             # GPT
             n += 1
-            print(' Assistant :', model_name + ', pass=' + str(n) + ', ')
+            self.print(f" Assistant : { model_name }, pass={ n }, ")
 
             # OpenAI
             if (self.openai_api_type != 'azure'):
 
                 # Assistant
-                res_text2, res_path2, nick_name, model_name, res_history = \
+                res_text2, res_path2, res_files2, nick_name, model_name, res_history = \
                     self.run_assistant(model_select=model_select,
                                        nick_name=nick_name, model_name=model_name,
                                        session_id=session_id, history=res_history, chat_class=chat_class,
@@ -2217,7 +2566,7 @@ Respond according to the following criteria:
             else:
 
                 # Assistant
-                res_text2, res_path2, nick_name, model_name, res_history = \
+                res_text2, res_path2, res_files2, nick_name, model_name, res_history = \
                     self.run_assistant(model_select=model_select,
                                        nick_name=nick_name, model_name=model_name,
                                        session_id=session_id, history=res_history, chat_class=chat_class,
@@ -2232,6 +2581,12 @@ Respond according to the following criteria:
             if  (res_path2 is not None) \
             and (res_path2 != ''):
                 res_path = res_path2
+            if  (res_files2 is not None):
+                if  (res_files2 != []):
+                    res_files.extend(res_files2)
+                    upload_files.extend(res_files2)
+                    res_files    = list(set(res_files))
+                    upload_files = list(set(upload_files))
 
             # 実行検査
             if  (res_text is None) \
@@ -2244,7 +2599,7 @@ Respond according to the following criteria:
                 check_inpText  = auto_inpText
                 check_inpText += '----- ＡＩ応答 -----' + '\n'
                 check_inpText += res_text2 + '\n\n'
-                wk_json, wk_path, wk_nick_name, wk_model_name, wk_history = \
+                wk_json, wk_path, wk_files, wk_nick_name, wk_model_name, wk_history = \
                     self.run_gpt(chat_class='check', model_select='auto',
                                  nick_name=None, model_name=None,
                                  session_id='sys', history=[],
@@ -2259,32 +2614,31 @@ Respond according to the following criteria:
                     continue_yn     = args_dic.get('continue')
                     result_point    = args_dic.get('result_point')
                     assessment_text = args_dic.get('assessment_text')
-                    print(' Assistant :', 'continue="' + continue_yn + '", point=' + str(result_point) + ', (' + wk_model_name + ')')
+                    self.print(f" Assistant : continue='{ continue_yn }', point={ result_point }, ({ wk_model_name })")
                     if (continue_yn != 'yes'):
-                        print(assessment_text)
+                        self.print(assessment_text)
                 except:
-                    print(wk_json)
+                    self.print(wk_json)
 
                 # 継続判断
                 if   (continue_yn == 'no') or (str(result_point) == '100'):
-                    print(' Assistant :', 'completed OK !')
+                    self.print(' Assistant : completed OK !')
                     break
                 elif (continue_yn != 'yes') \
                 and  (continue_yn != 'no'):
-                    print(' Assistant :', 'stop !')
+                    self.print(' Assistant : stop !')
                     break
                 else:
                     if (n < int(self.auto_continue)):
-                        #print(' Assistant :', 'assistant' + '\n' + res_text2)
                         reqText = ''
                         inpText = ''
                         if (continue_yn == 'yes'):
                             inpText += assessment_text + '\n'
                         inpText += '適切に判断して処理を継続してください' + '\n'
-                        print(' Assistant :', 'auto continue,', )
-                        print(inpText)
+                        self.print(' Assistant : auto continue,')
+                        self.print(inpText)
                     else:
-                        print(' Assistant :', 'auto continue exit !', )
+                        self.print(' Assistant : auto continue exit !')
 
         # ファイル削除
         if  (self.work_upload_ids   is not None) \
@@ -2294,7 +2648,7 @@ Respond according to the following criteria:
                                         assistant_id    = self.work_assistant_id,
                                         assistant_name  = self.work_assistant_name, )
 
-        return res_text, res_path, nick_name, model_name, res_history
+        return res_text, res_path, res_files, nick_name, model_name, res_history
 
 
 
@@ -2307,12 +2661,13 @@ Respond according to the following criteria:
         # 戻り値
         res_text        = ''
         res_path        = ''
+        res_files       = []
         nick_name       = None
         model_name      = None
         res_history     = history
 
         if (self.bot_auth is None):
-            print('ChatGPT: Not Authenticate Error !')
+            self.print('ChatGPT: Not Authenticate Error !')
             return res_text, res_path, nick_name, model_name, res_history
 
         # 実行モデル判定
@@ -2331,7 +2686,7 @@ Respond according to the following criteria:
         or (model_select == 'b') \
         or (model_select == 'v'):
             #try:
-                res_text, res_path, nick_name, model_name, res_history = \
+                res_text, res_path, res_files, nick_name, model_name, res_history = \
                     self.run_gpt(chat_class=chat_class, model_select=model_select,
                                  nick_name=nick_name, model_name=model_name,
                                  session_id=session_id, history=res_history,
@@ -2344,7 +2699,7 @@ Respond according to the following criteria:
         # Assistant
         elif (model_select == 'x'):
             #try:
-                res_text, res_path, nick_name, model_name, res_history = \
+                res_text, res_path, res_files, nick_name, model_name, res_history = \
                     self.auto_assistant(chat_class=chat_class, model_select=model_select,
                                         nick_name=nick_name, model_name=model_name,
                                         session_id=session_id, history=res_history,
@@ -2354,13 +2709,15 @@ Respond according to the following criteria:
             #except Exception as e:
             #    print(e)
         else:
-            print(' ChatGPT :', 'Model select error!', api_type, model_select)
+            self.print(f" ChatGPT : Model select error! { api_type }, { model_select }")
 
         # 文書成形
         if (res_text != ''):
             res_text = res_text.replace('。', '。\n')
             res_text = res_text.replace('。\n」', '。」')
-            res_text = res_text.replace('\r', '')
+            res_text = res_text.replace('？', '？\n')
+            res_text = res_text.replace('？\n」','？」')
+            res_text = res_text.replace('\r', '\n')
             hit = True
             while (hit == True):
                 if (res_text.find('\n\n')>0):
@@ -2372,7 +2729,7 @@ Respond according to the following criteria:
         else:
             res_text = '!'
 
-        return res_text, res_path, nick_name, model_name, res_history
+        return res_text, res_path, res_files, nick_name, model_name, res_history
 
 
 
@@ -2383,6 +2740,9 @@ if __name__ == '__main__':
 
         api_type = openai_key.getkey('chatgpt','openai_api_type')
         print(api_type)
+
+        log_queue = queue.Queue()
+        res = openaiAPI.init(log_queue=log_queue, )
 
         if (api_type != 'azure'):
             res = openaiAPI.authenticate('chatgpt',
@@ -2432,10 +2792,11 @@ if __name__ == '__main__':
                             )
         print('authenticate:', res, )
         if (res == True):
-
+            
             if True:
                 #res, msg = openaiAPI.functions_load(functions_path='_extensions/openai_gpt/', secure_level='medium', )
-                res, msg = openaiAPI.functions_load(functions_path='_extensions/openai_gpt/', secure_level='low', )
+                res, msg = openaiAPI.functions_load(
+                    functions_path='_extensions/openai_gpt/', secure_level='low', )
                 if (res != True) or (msg != ''):
                     print(msg)
                     print()
@@ -2450,7 +2811,7 @@ if __name__ == '__main__':
                 print('[Request]')
                 print(reqText, inpText )
                 print()
-                res_text, res_path, res_name, res_api, openaiAPI.history = openaiAPI.chatBot(
+                res_text, res_path, res_files, res_name, res_api, openaiAPI.history = openaiAPI.chatBot(
                             chat_class='vision', model_select='auto', 
                             session_id='0', history=openaiAPI.history,
                             sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
@@ -2474,7 +2835,7 @@ if __name__ == '__main__':
                 print('[Request]')
                 print(reqText, inpText )
                 print()
-                res_text, res_path, res_name, res_api, openaiAPI.history = openaiAPI.chatBot(
+                res_text, res_path, res_files, res_name, res_api, openaiAPI.history = openaiAPI.chatBot(
                             chat_class='chat', model_select='auto', 
                             session_id='0', history=openaiAPI.history,
                             sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
@@ -2487,14 +2848,16 @@ if __name__ == '__main__':
             if True:
                 sysText = None
                 reqText = ''
-                #inpText = 'おはようございます。'
+                #inpText = 'riki,おはようございます。'
                 #inpText = '計算式 123 * 456 * (7 + 8) の答え？'
-                inpText = 'riki,東京の天気？'
+                #inpText = 'riki,東京の天気？'
                 #inpText = 'gpt4,日本の主要３都市の天気？'
-                #inpText = 'riki,今日は何月何日？'
+                #inpText = 'riki,日本の主要３都市の天気？'
+                inpText = 'riki,今日は何月何日？'
                 #inpText = 'riki,私のニックネームを覚えていますか？'
                 #inpText = 'riki,小説でマインは何階に住んでいますか？'
-                #inpText = '保存してあるClip&GPTのナレッジ文書を検索して、起動方法教えて'
+                #inpText = 'riki,かわいい猫の画像生成して、その画像を言葉で説明して'
+                #inpText = '保存してあるClip&GPTのナレッジ文書を検索して、日本語で起動方法教えて'
                 #inpText = 'ランダムな数値での折れ線グラフ出力するプログラム生成。\n生成後に実行\n実行結果の画像と使ったソースをください。'
                 #inpText = 'guiですぐに遊べるリバーシプログラムの生成お願いします。最後にソースをください。'
                 filePath = []
@@ -2506,7 +2869,7 @@ if __name__ == '__main__':
                 print('[Request]')
                 print(reqText, inpText )
                 print()
-                res_text, res_path, res_name, res_api, openaiAPI.history = openaiAPI.chatBot(
+                res_text, res_path, res_files, res_name, res_api, openaiAPI.history = openaiAPI.chatBot(
                             chat_class='auto', model_select='auto', 
                             session_id='0', history=openaiAPI.history,
                             sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
