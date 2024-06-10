@@ -507,11 +507,11 @@ class proc_coreChat:
         reqText = ''
         inpText = proc_txt
         #print('input  :', inpText, )
-        res_txt, res_path, res_files, res_name, res_api, openaiAPI.history = openaiAPI.chatBot(
-                    session_id='0', history=openaiAPI.history, chat_class='chat',
-                    sysText=sysText, reqText=reqText, inpText=inpText, filePath=[],
-                    model_select='auto',
-                    inpLang='ja', outLang='ja', )
+        res_txt, res_path, res_files, res_name, res_api, openaiAPI.history = \
+            openaiAPI.chatBot(  chat_class='chat', model_select='auto',
+                                session_id='admin', history=openaiAPI.history, function_modules=[],
+                                sysText=sysText, reqText=reqText, inpText=inpText, filePath=[],
+                                inpLang='ja', outLang='ja', )
         #print('output :', res_txt + res_path, '(' + res_api + ')', res_name, )
         if (res_txt != ''):
 

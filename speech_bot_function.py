@@ -34,7 +34,7 @@ class botFunction:
     def init(self, ):
         return True
 
-    def functions_load(self, functions_path='_extensions/openai_gpt/', secure_level='medium', ):
+    def functions_load(self, functions_path='_extensions/function/', secure_level='medium', ):
         res_load_all = True
         res_load_msg = ''
         self.functions_unload()
@@ -128,7 +128,7 @@ class botFunction:
             ext_script     = module_dic['script']
             ext_func_name  = module_dic['func_name']
             ext_func_reset = module_dic['func_reset']
-            print('Functions Reset  ...  "' + ext_script + '" (' + ext_func_name + ') _class.func_reset')
+            print('Functions Reset   ... "' + ext_script + '" (' + ext_func_name + ') _class.func_reset')
             try:
                 res = False
                 res = ext_func_reset()
@@ -152,7 +152,7 @@ class botFunction:
             ext_module    = module_dic['module']
             ext_class     = module_dic['class']
             ext_func_proc = module_dic['func_proc']
-            print('Functions Unload ...  "' + ext_script + '" (' + ext_func_name + ') _class.func_proc')
+            print('Functions Unload  ... "' + ext_script + '" (' + ext_func_name + ') _class.func_proc')
 
             try:
                 #del ext_func_proc
@@ -176,9 +176,9 @@ if __name__ == '__main__':
         if (True):
             
             if True:
-                #res, msg = openaiAPI.functions_load(functions_path='_extensions/openai_gpt/', secure_level='medium', )
+                #res, msg = openaiAPI.functions_load(functions_path='_extensions/function/', secure_level='medium', )
                 res, msg = botFunc.functions_load(
-                    functions_path='_extensions/openai_gpt/', secure_level='low', )
+                    functions_path='_extensions/function/', secure_level='low', )
                 if (res != True) or (msg != ''):
                     print(msg)
                     print()

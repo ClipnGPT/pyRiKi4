@@ -17,12 +17,13 @@ import codecs
 import shutil
 
 import glob
-import importlib
 import base64
 
 import json
 
 import socket
+
+from openai.types.beta.threads import Message
 qHOSTNAME = socket.gethostname().lower()
 
 import queue
@@ -64,7 +65,7 @@ class my_eventHandler(AssistantEventHandler):
                  my_client=None,
                  my_assistant_id='', my_assistant_name='',
                  my_thread_id='', 
-                 session_id='0', res_history=[], function_modules=[], 
+                 session_id='admin', res_history=[], function_modules=[], 
                  res_text='', res_path='', res_files=[], 
                  upload_files=[], upload_flag=False, ):
         
@@ -92,21 +93,24 @@ class my_eventHandler(AssistantEventHandler):
         self.upload_files       = upload_files
         self.upload_flag        = upload_flag
 
-    def print(self, session_id='0', text='', ):
+    def print(self, session_id='admin', text='', ):
         print(text, flush=True)
-        if (session_id == '0') and (self.log_queue is not None):
+        if (session_id == 'admin') and (self.log_queue is not None):
             try:
                 self.log_queue.put(['chatBot', text + '\n'])
             except:
                 pass
 
-    def stream(self, session_id='0', text='', ):
+    def stream(self, session_id='admin', text='', ):
         print(text, end='', flush=True)
-        if (session_id == '0') and (self.log_queue is not None):
+        if (session_id == 'admin') and (self.log_queue is not None):
             try:
                 self.log_queue.put(['chatBot', text])
             except:
                 pass
+
+    # ↓ helpers情報
+    # https://github.com/openai/openai-python/blob/main/helpers.md
 
     @override 
     def on_event ( self, event: AssistantStreamEvent ) -> None : 
@@ -140,18 +144,49 @@ class my_eventHandler(AssistantEventHandler):
         
     @override
     def on_text_delta(self, delta, snapshot):
-        if (delta.value != '\n'):
-            self.stream(self.session_id, f"{ delta.value }")
-        else:
-            if (self.res_text[-1] != '\n'):
+        if (delta.value is not None):
+            if (delta.value != '\n'):
                 self.stream(self.session_id, f"{ delta.value }")
-        self.res_text += str(delta.value)
+            else:
+                if (self.res_text[-1] != '\n'):
+                    self.stream(self.session_id, f"{ delta.value }")
+            self.res_text += str(delta.value)
 
     @override
     def on_text_done(self, text):
         if (self.res_text[-1] != '\n'):
             self.stream(self.session_id, '\n')
             self.res_text += '\n'
+
+    @override
+    def on_image_file_done(self, ImageFile):
+        print('on_image_file_done !', ImageFile)
+
+    @override
+    def on_message_done(self, Message):
+        # ファイル受信
+        for c in range(len(Message.content)):
+            content_type = Message.content[c].type
+
+            if (content_type == 'text'):
+                for a in range(len(Message.content[c].text.annotations)):
+                    try:
+                        file_type = Message.content[c].text.annotations[a].type
+                        file_text = Message.content[c].text.annotations[a].text
+                        file_id   = Message.content[c].text.annotations[a].file_path.file_id
+
+                        file_dic  = self.my_client.files.retrieve(file_id)
+                        filename = os.path.basename(file_dic.filename)
+                        content_file = self.my_client.files.content(file_id)
+                        data_bytes   = content_file.read()
+                        with open(qPath_output + filename, "wb") as file:
+                            file.write(data_bytes)
+
+                        self.res_path = qPath_output + filename
+                        self.print(self.session_id, f" Assistant : Download ... { file_text }")
+                    except Exception as e:
+                        #print(e)
+                        pass
 
     @override
     def on_end(self, ):
@@ -292,7 +327,7 @@ class my_eventHandler(AssistantEventHandler):
             self.upload_files = my_handler.upload_files
             self.upload_flag  = my_handler.upload_flag
 
-    def threadFile_set(self, session_id='0', upload_files=[], assistant_id=None, assistant_name='', ):
+    def threadFile_set(self, session_id='admin', upload_files=[], assistant_id=None, assistant_name='', ):
         upload_ids = []
 
         # # 2024/04/21時点 azure 未対応
@@ -351,10 +386,6 @@ class ChatBotAPI:
 
         self.temperature            = 0.8
         self.timeOut                = 60
-        self.last_input_class       = 'chat'
-        self.last_chat_class        = 'chat'
-        self.last_model_select      = 'auto'
-        self.last_auto_inpText      = None
         
         self.openai_api_type        = None
         self.openai_default_gpt     = None
@@ -405,25 +436,21 @@ class ChatBotAPI:
 
     def reset(self, ):
         self.history                = []
-        self.last_input_class       = 'chat'
-        self.last_chat_class        = 'chat'
-        self.last_model_select      = 'auto'
-        self.last_auto_inpText      = None
         self.assistant_id           = {}
         self.thread_id              = {}
         return True
 
-    def print(self, session_id='0', text='', ):
+    def print(self, session_id='admin', text='', ):
         print(text, flush=True)
-        if (session_id == '0') and (self.log_queue is not None):
+        if (session_id == 'admin') and (self.log_queue is not None):
             try:
                 self.log_queue.put(['chatBot', text + '\n'])
             except:
                 pass
 
-    def stream(self, session_id='0', text='', ):
+    def stream(self, session_id='admin', text='', ):
         print(text, end='', flush=True)
-        if (session_id == '0') and (self.log_queue is not None):
+        if (session_id == 'admin') and (self.log_queue is not None):
             try:
                 self.log_queue.put(['chatBot', text])
             except:
@@ -519,19 +546,23 @@ class ChatBotAPI:
             self.gpt_x_token2       = int(gpt_x_token2)
 
             if (openai_api_type == 'openai'):
-                self.openai_api_type = openai_api_type
-                self.client_ab = openai.OpenAI(
-                    organization=openai_organization,
-                    api_key=openai_key_id,
-                )
-                self.client_v  = openai.OpenAI(
-                    organization=openai_organization,
-                    api_key=openai_key_id,
-                )
-                self.client_x  = openai.OpenAI(
-                    organization=openai_organization,
-                    api_key=openai_key_id,
-                )
+                try:
+                    self.openai_api_type = openai_api_type
+                    self.client_ab = openai.OpenAI(
+                        organization=openai_organization,
+                        api_key=openai_key_id,
+                    )
+                    self.client_v  = openai.OpenAI(
+                        organization=openai_organization,
+                        api_key=openai_key_id,
+                    )
+                    self.client_x  = openai.OpenAI(
+                        organization=openai_organization,
+                        api_key=openai_key_id,
+                    )
+                except Exception as e:
+                    print(e)
+                    return False
 
                 try:
                     res = self.client_ab.models.list()
@@ -572,22 +603,25 @@ class ChatBotAPI:
                     print(e)
 
             if (openai_api_type == 'azure'):
-                self.openai_api_type = openai_api_type
-                self.client_ab = openai.AzureOpenAI(
-                    azure_endpoint=azure_endpoint,
-                    api_version=azure_version,
-                    api_key=azure_key_id,
-                )
-                self.client_v  = openai.AzureOpenAI(
-                    azure_endpoint=azure_endpoint,
-                    api_version=azure_version,
-                    api_key=azure_key_id,
-                )
-                self.client_x  = openai.AzureOpenAI(
-                    azure_endpoint=azure_endpoint,
-                    api_version=azure_version,
-                    api_key=azure_key_id,
-                )
+                try:
+                    self.openai_api_type = openai_api_type
+                    self.client_ab = openai.AzureOpenAI(
+                        azure_endpoint=azure_endpoint,
+                        api_version=azure_version,
+                        api_key=azure_key_id,
+                    )
+                    self.client_v  = openai.AzureOpenAI(
+                        azure_endpoint=azure_endpoint,
+                        api_version=azure_version,
+                        api_key=azure_key_id,
+                    )
+                    self.client_x  = openai.AzureOpenAI(
+                        azure_endpoint=azure_endpoint,
+                        api_version=azure_version,
+                        api_key=azure_key_id,
+                    )
+                except Exception as e:
+                    print(e)
 
                 self.azure_endpoint     = azure_endpoint
                 self.azure_version      = azure_version
@@ -654,14 +688,15 @@ class ChatBotAPI:
     def history_zip1(self, history=[]):
         res_history = history
 
-        for h in reversed(range(len(res_history))):
-            tm = res_history[h]['time']
-            if ((time.time() - tm) > 900): #15分で忘れてもらう
-                if (h != 0):
-                    del res_history[h]
-                else:
-                    if (res_history[0]['role'] != 'system'):
-                        del res_history[0]
+        if (len(res_history) > 0):
+            for h in reversed(range(len(res_history))):
+                tm = res_history[h]['time']
+                if ((time.time() - tm) > 900): #15分で忘れてもらう
+                    if (h != 0):
+                        del res_history[h]
+                    else:
+                        if (res_history[0]['role'] != 'system'):
+                            del res_history[0]
 
         return res_history
 
@@ -718,7 +753,7 @@ class ChatBotAPI:
 
         return res_msg
 
-    def checkTokens(self, session_id='0', messages={}, functions=[], model_select='auto', ):
+    def checkTokens(self, session_id='admin', messages={}, functions=[], model_select='auto', ):
         select = 'a'
         nick_name = self.gpt_a_nick_name
         model     = self.gpt_a_model1
@@ -850,15 +885,7 @@ class ChatBotAPI:
 
 
 
-    def model_check(self, chat_class='auto', model_select='auto',
-                    session_id='internal', history=[], function_modules=[],
-                    sysText=None, reqText=None, inpText='こんにちは', filePath=[], ):
-
-        # 戻り値
-        chat_class   = chat_class
-        model_select = model_select
-        nick_name    = None
-        model_name   = None
+    def files_check(self, filePath=[], ):
         upload_files = []
         image_urls   = []
 
@@ -886,235 +913,16 @@ class ChatBotAPI:
             except Exception as e:
                 print(e)
 
-        # チャットクラス判定
-        if   (chat_class != 'auto'):
-            self.last_input_class = chat_class
-            self.print(session_id, f" ChatGPT : user chat class = [ { chat_class } ]")
-
-        elif (chat_class == 'auto') \
-        and (inpText.strip()[:5].lower() == ('riki,')):
-            chat_class = 'assistant'
-            self.last_input_class = chat_class
-            self.print(session_id, f" ChatGPT : user chat class = [ { chat_class } ]")
-
-        elif (chat_class == 'auto') \
-        and (inpText.strip()[:10].lower() == ('assistant,')):
-            chat_class = 'assistant'
-            self.last_input_class = chat_class
-            self.print(session_id, f" ChatGPT : user chat class = [ { chat_class } ]")
-
-        elif (chat_class == 'auto') \
-        and (inpText.strip()[:7].lower() == ('vision,')):
-            chat_class = 'vision'
-            self.last_input_class = chat_class
-            self.print(session_id, f" ChatGPT : user chat class = [ { chat_class } ]")
-
-        elif (self.gpt_a_model1 == self.gpt_b_model1) \
-        and  (self.gpt_x_model1 == self.gpt_a_model1) \
-        and  (self.gpt_x_model2 == self.gpt_b_model1):
-            chat_class = 'chat'
-            self.last_input_class = chat_class
-            self.print(session_id, f" ChatGPT : pass chat class = [ { chat_class } ]")
-
-        else:
-            # history 圧縮 (最後４つ残す)
-            old_history = self.history_zip2(history=history, )
-
-# ----- あなたの役割 -----
-# あなたは、会話履歴と最後のユーザー入力から、ユーザーの意図を推測し、適切なクラスに分類します。
-# ユーザー入力の内容を理解し、それを正しい分類に関連付けて回答します。
-# 以下のクラスのうち、適切なものに分類して回答してください。
-# 回答はjson形式でchat_classでお願いします。
-
-# ----- あなたへの依頼 -----
-# 会話履歴と最後のユーザー入力から、ユーザーの意図を分類してください。
-# 決められた単語で分類、回答してください。
-# 1) おはよう、こんにちは等のあいさつは、"chat"
-# 2) 画像分析に関する指示や質問なら、"vision"
-# 3) 会話の続きや返事など、新たな質問ではないときは、"continue"
-# 4) AIが作成、生成、計算などを伴う高度な指示なら、"code_interpreter"
-# 5) ナレッジ情報や外部情報を扱う指示なら、"knowledge"
-# 6) チャットAI単体で処理できる単純な指示や質問なら、"chat"
-# 7) AIがtoolやfunctionと連携を行う高度な指示なら、"assistant"
-# 8) 上記のいずれにも当てはまらない場合は、適切と思われる英単語
-
-            # GPT によるモデル判定
-            wk_history = []
-            wk_sysText = \
-"""
------ Your Role -----
-You are to infer the user's intent from the conversation history and the last user input, and classify it into the appropriate category.
-Understand the content of the user input and associate it with the correct classification in your response.
-Please classify and respond in json format using "chat_class".
-""" + '\n\n'
-            wk_reqText = \
-"""
------ Your Task -----
-Classify the user's intent from the conversation history and the last user input.
-Please classify and respond using the designated words.
-1) Greetings such as "good morning" or "hello" should be classified as "chat".
-2) Instructions or questions about image analysis should be classified as "vision".
-3) Continuations or replies that are not new questions should be classified as "continue".
-4) Advanced instructions for the AI involving creation, generation, or computation should be classified as "code_interpreter".
-5) Instructions involving knowledge information or external information should be classified as "knowledge".
-6) Simple instructions or questions that can be processed by the chat AI alone should be classified as "chat".
-7) Advanced instructions involving collaboration with tools or functions should be classified as "assistant".
-8) If it does not fit any of the above categories, classify it with an appropriate English word.
-""" + '\n\n'
-            wk_inpText = ''
-            if (len(old_history) > 2):
-                wk_inpText += '----- 会話履歴 -----' + '\n'
-                for m in range(len(old_history) - 1):
-                    role    = str(old_history[m].get('role', ''))
-                    content = str(old_history[m].get('content', ''))
-                    name    = str(old_history[m].get('name', ''))
-                    if (role != 'system'):
-                        # 全てユーザーメッセージにて処理
-                        if (name is None) or (name == ''):
-                            wk_inpText += '(' + role + ')' + '\n'
-                            wk_inpText += content + '\n\n'
-            wk_inpText += '----- 最後のユーザー入力 -----' + '\n'
-            wk_inpText += inpText + '\n\n'
-
-            wk_json, wk_path, wk_files, wk_nick_name, wk_model_name, wk_history = \
-                self.run_gpt(chat_class='check', model_select='auto',
-                             nick_name=None, model_name=None, 
-                             session_id='sys', history=[], function_modules=[],
-                             sysText=wk_sysText, reqText=wk_reqText, inpText=wk_inpText,
-                             upload_files=[], image_urls=[],
-                             jsonMode=True, )
-            chat_class = wk_json
-            try:
-                args_dic   = json.loads(wk_json)
-                chat_class = args_dic.get('chat_class')
-            except:
-                self.print(session_id, wk_json)
-            self.last_input_class = chat_class
-
-            if  (chat_class != 'auto') \
-            and (chat_class != 'vision') \
-            and (chat_class != 'continue') \
-            and (chat_class != 'code_interpreter') \
-            and (chat_class != 'knowledge') \
-            and (chat_class != 'chat') \
-            and (chat_class != 'assistant'):
-                self.print(session_id, f" ChatGPT : auto chat class error !, [ { chat_class } ] ({ wk_model_name })")
-                chat_class = 'auto'
-            else:
-                self.print(session_id, f" ChatGPT : auto chat class = [ { chat_class } ] ({ wk_model_name })")
-
-        # model 指定
-        user_select = None
-        if (self.gpt_a_nick_name != ''):
-            if (inpText.strip()[:len(self.gpt_a_nick_name)+1].lower() == (self.gpt_a_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gpt_a_nick_name)+1:]
-                if (self.gpt_a_enable == True):
-                    user_select  = 'a'
-        if (self.gpt_b_nick_name != ''):
-            if (inpText.strip()[:len(self.gpt_b_nick_name)+1].lower() == (self.gpt_b_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gpt_b_nick_name)+1:]
-                if (self.gpt_b_enable == True):
-                    user_select  = 'b'
-        if (self.gpt_v_nick_name != ''):
-            if (inpText.strip()[:len(self.gpt_v_nick_name)+1].lower() == (self.gpt_v_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gpt_v_nick_name)+1:]
-                if (self.gpt_v_enable == True):
-                    if  (len(image_urls) > 0) \
-                    and (len(image_urls) == len(upload_files)):
-                        user_select  = 'v'
-        if (inpText.strip()[:7].lower() == ('vision,')):
-                inpText = inpText.strip()[7:]
-                if (self.gpt_v_enable == True):
-                    if  (len(image_urls) > 0) \
-                    and (len(image_urls) == len(upload_files)):
-                        user_select  = 'v'
-        if (self.gpt_x_nick_name != ''):
-            if (inpText.strip()[:len(self.gpt_x_nick_name)+1].lower() == (self.gpt_x_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gpt_x_nick_name)+1:]
-                if (self.gpt_x_enable == True):
-                    user_select  = 'x'
-                    model_name   = self.gpt_x_model2
-        if (inpText.strip()[:5].lower() == ('riki,')):
-                inpText = inpText.strip()[5:]
-                if (self.gpt_x_enable == True):
-                    user_select  = 'x'
-                    model_name   = self.gpt_x_model2
-        if  (user_select is not None) \
-        and (model_select == 'auto'):
-            model_select = user_select
-
-        # model 判定
-        if (user_select is None):
-            if (chat_class == 'vision'):
-                if (model_select != 'v'):
-                    if  (len(image_urls) > 0) \
-                    and (len(image_urls) == len(upload_files)):
-                        if  (self.gpt_v_nick_name != '') \
-                        and (self.gpt_v_enable == True):
-                            model_select = 'v'
-
-            if (chat_class == 'continue'):
-                chat_class   = self.last_chat_class
-                model_select = self.last_model_select
-                self.print(session_id, f" ChatGPT : continue chat class = [ { chat_class } ] ({ model_select })")
-
-            if (chat_class == 'knowledge') \
-            or (chat_class == 'code_interpreter') \
-            or (chat_class == 'assistant'):
-                if  (self.gpt_x_nick_name != '') \
-                and (self.gpt_x_enable == True):
-                    model_select = 'x'
-                    #if  (chat_class != 'knowledge') \
-                    #and (chat_class != 'assistant'):
-                    #    self.print(session_id, f" ChatGPT : chat class auto change [ { chat_class } ] → [ assistant ]")
-                    #    chat_class == 'assistant'
-                else:
-                    # 最後の要求
-                    self.last_auto_inpText = None
-            else:
-                    # 最後の要求
-                    self.last_auto_inpText = None
-
-        if (chat_class != 'continue'):
-            self.last_chat_class  = chat_class
-
-        # model 補正
-        if (model_select == 'v'):
-            if (self.gpt_v_nick_name == '') \
-            or (self.gpt_v_enable == False):
-                model_select = 'auto'
-                model_name   = None
-            if (len(image_urls) == 0) \
-            or (len(image_urls) != len(upload_files)):
-                model_select = 'auto'
-                model_name   = None
-
-        if (model_select == 'x'):
-            if   (self.gpt_x_nick_name == '') \
-            or   (self.gpt_x_enable == False):
-                model_select = 'auto'
-                model_name   = None
-
-        if (model_select == 'auto'):
-            if (self.gpt_b_enable == True):
-                if  (self.gpt_b_length != 0) \
-                and (len(inpText) >= self.gpt_b_length):
-                    model_select = 'b'
-
-        #print(res_content, model_select)
-
-        if (model_select != 'v'):
-            self.last_model_select = model_select
-        return chat_class, model_select, nick_name, model_name, upload_files, image_urls
+        return upload_files, image_urls
 
 
 
     def run_gpt(self, chat_class='chat', model_select='auto',
                 nick_name=None, model_name=None,
-                session_id='0', history=[], function_modules=[],
+                session_id='admin', history=[], function_modules=[],
                 sysText=None, reqText=None, inpText='こんにちは',
                 upload_files=[], image_urls=[], 
-                temperature=0.8, maxStep=10, jsonMode=False, ):
+                temperature=0.8, max_step=10, jsonMode=False, ):
         #self.assistant_id[str(session_id)] = None
         self.thread_id[str(session_id)] = None
         functions = []
@@ -1125,47 +933,63 @@ Please classify and respond using the designated words.
         res_text    = ''
         res_path    = ''
         res_files   = []
-        #res_name    = None
-        #res_api     = None
+        res_name    = None
+        res_api     = None
         res_history = history
 
         # model 指定
-        user_select = None
-        if (self.gpt_a_nick_name != ''):
-            if (inpText.strip()[:len(self.gpt_a_nick_name)+1].lower() == (self.gpt_a_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gpt_a_nick_name)+1:]
-                if (self.gpt_a_enable == True):
-                    user_select  = 'a'
-        if (self.gpt_b_nick_name != ''):
-            if (inpText.strip()[:len(self.gpt_b_nick_name)+1].lower() == (self.gpt_b_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gpt_b_nick_name)+1:]
-                if (self.gpt_b_enable == True):
-                    user_select  = 'b'
-        if (self.gpt_v_nick_name != ''):
-            if (inpText.strip()[:len(self.gpt_v_nick_name)+1].lower() == (self.gpt_v_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gpt_v_nick_name)+1:]
-                if (self.gpt_v_enable == True):
-                    if  (len(image_urls) > 0) \
-                    and (len(image_urls) == len(upload_files)):
-                        user_select  = 'v'
-        if (inpText.strip()[:7].lower() == ('vision,')):
+        if (inpText.strip()[:len(self.gpt_a_nick_name)+1].lower() == (self.gpt_a_nick_name.lower() + ',')):
+            inpText = inpText.strip()[len(self.gpt_a_nick_name)+1:]
+            if (self.gpt_a_enable == True):
+                    model_select = 'a'
+        elif (inpText.strip()[:len(self.gpt_b_nick_name)+1].lower() == (self.gpt_b_nick_name.lower() + ',')):
+            inpText = inpText.strip()[len(self.gpt_b_nick_name)+1:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'b'
+        elif (inpText.strip()[:len(self.gpt_v_nick_name)+1].lower() == (self.gpt_v_nick_name.lower() + ',')):
+            inpText = inpText.strip()[len(self.gpt_v_nick_name)+1:]
+            if (self.gpt_v_enable == True):
+                if  (len(image_urls) > 0) \
+                and (len(image_urls) == len(upload_files)):
+                    model_select = 'v'
+        elif (inpText.strip()[:len(self.gpt_x_nick_name)+1].lower() == (self.gpt_x_nick_name.lower() + ',')):
+            inpText = inpText.strip()[len(self.gpt_x_nick_name)+1:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'b'
+        elif (inpText.strip()[:5].lower() == ('riki,')):
+            inpText = inpText.strip()[5:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'b'
+        elif (inpText.strip()[:7].lower() == ('vision,')):
             inpText = inpText.strip()[7:]
             if (self.gpt_v_enable == True):
                 if  (len(image_urls) > 0) \
                 and (len(image_urls) == len(upload_files)):
-                    user_select  = 'v'
-        if (self.gpt_x_nick_name != ''):
-            if (inpText.strip()[:len(self.gpt_x_nick_name)+1].lower() == (self.gpt_x_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gpt_x_nick_name)+1:]
-                if (self.gpt_x_enable == True):
-                    user_select  = 'x'
-        if (inpText.strip()[:5].lower() == ('riki,')):
-            inpText = inpText.strip()[5:]
-            if (self.gpt_x_enable == True):
-                user_select  = 'x'
-        if  (user_select is not None) \
-        and (model_select == 'auto'):
-            model_select = user_select
+                    model_select = 'v'
+        elif (inpText.strip()[:10].lower() == ('assistant,')):
+            inpText = inpText.strip()[10:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'b'
+        elif (inpText.strip()[:7].lower() == ('openai,')):
+            inpText = inpText.strip()[7:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'b'
+        elif (inpText.strip()[:7].lower() == ('google,')):
+            inpText = inpText.strip()[7:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'b'
+        elif (inpText.strip()[:7].lower() == ('gemini,')):
+            inpText = inpText.strip()[7:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'b'
+
+        # Vision ?
+        if (model_select == 'auto'):
+            if (chat_class == 'auto') or (chat_class == 'vision'):
+                if (self.gpt_v_enable == True):
+                    if  (len(image_urls) > 0) \
+                    and (len(image_urls) == len(upload_files)):
+                        model_select = 'v'
 
         # history 追加・圧縮 (古いメッセージ)
         res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )
@@ -1177,21 +1001,46 @@ Please classify and respond using the designated words.
         else:
             msg = self.history2msg_vision(history=res_history, image_urls=image_urls,)
 
+        # ストリーム実行?
+        if (session_id == 'admin'):
+            stream = True
+        else:
+            stream = False
+
         # 実行ループ
-        n = 0
-        function_name = ''
-        while (function_name != 'exit') and (n < int(maxStep)):
+        try:
 
-            # トークン数チェック　→　モデル確定
-            nick_name, model_name, len_tokens = self.checkTokens(session_id=session_id, messages=msg, functions=functions, model_select=model_select, )
-            if (model_name is None):
-                self.print(session_id, f" ChatGPT : Token length over ! ({ len_tokens })")
+            n = 0
+            function_name = ''
+            while (function_name != 'exit') and (n < int(max_step)):
 
-                if (len(res_history) > 6):
-                    self.print(session_id, ' ChatGPT : History compress !')
+                # トークン数チェック　→　モデル確定
+                res_name, res_api, len_tokens = self.checkTokens(session_id=session_id, messages=msg, functions=functions, model_select=model_select, )
+                if (res_api is None):
+                    self.print(session_id, f" ChatGPT : Token length over ! ({ len_tokens })")
 
-                    # history 圧縮 (最後４つ残す)
-                    res_history = self.history_zip2(history=res_history, )
+                    if (len(res_history) > 6):
+                        self.print(session_id, ' ChatGPT : History compress !')
+
+                        # history 圧縮 (最後４つ残す)
+                        res_history = self.history_zip2(history=res_history, )
+
+                        # メッセージ作成
+                        if (model_select != 'v'):
+                            msg = self.history2msg_gpt(history=res_history, )
+                        else:
+                            msg = self.history2msg_vision(history=res_history, image_urls=image_urls,)
+
+                        # トークン数再計算
+                        res_name, res_api, len_tokens = self.checkTokens(session_id=session_id, messages=msg, functions=functions, model_select=model_select, )
+
+                if (res_api is None):
+                    self.print(session_id, ' ChatGPT : History reset !')
+
+                    # history リセット
+                    res_history = []
+                    res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )
+                    #res_history = self.zipHistory(history=res_history, )
 
                     # メッセージ作成
                     if (model_select != 'v'):
@@ -1200,56 +1049,33 @@ Please classify and respond using the designated words.
                         msg = self.history2msg_vision(history=res_history, image_urls=image_urls,)
 
                     # トークン数再計算
-                    nick_name, model_name, len_tokens = self.checkTokens(session_id=session_id, messages=msg, functions=functions, model_select=model_select, )
+                    res_name, res_api, len_tokens = self.checkTokens(session_id=session_id, messages=msg, functions=functions, model_select=model_select, )
 
-            if (model_name is None):
-                self.print(session_id, ' ChatGPT : History reset !')
+                if (res_api is None):
+                    self.print(session_id, f" ChatGPT : Token length Error ! (functions 無効化！)")
 
-                # history リセット
-                res_history = []
-                res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )
-                #res_history = self.zipHistory(history=res_history, )
+                    # functions 無効化！
+                    functions = []
 
-                # メッセージ作成
-                if (model_select != 'v'):
-                    msg = self.history2msg_gpt(history=res_history, )
-                else:
-                    msg = self.history2msg_vision(history=res_history, image_urls=image_urls,)
+                    # トークン数再計算
+                    res_name, res_api, len_tokens = self.checkTokens(session_id=session_id, messages=msg, functions=functions, model_select=model_select, )
 
-                # トークン数再計算
-                nick_name, model_name, len_tokens = self.checkTokens(session_id=session_id, messages=msg, functions=functions, model_select=model_select, )
+                if (res_api is None):
+                    self.print(session_id, f" ChatGPT : Token length Error ! ({ len_tokens })")
+                    return res_text, res_path, res_files, None, None, res_history
 
-            if (model_name is None):
-                self.print(session_id, f" ChatGPT : Token length Error ! (functions 無効化！)")
+                # GPT
+                n += 1
+                self.print(session_id, f" ChatGPT : { res_name }, pass={ n }, tokens={ len_tokens }, ")
 
-                # functions 無効化！
-                functions = []
+                # 結果
+                res_role      = None
+                res_content   = None
+                tool_calls    = []
 
-                # トークン数再計算
-                nick_name, model_name, len_tokens = self.checkTokens(session_id=session_id, messages=msg, functions=functions, model_select=model_select, )
+                # https://community.openai.com/t/has-anyone-managed-to-get-a-tool-call-working-when-stream-true/498867/3
 
-            if (model_name is None):
-                self.print(session_id, f" ChatGPT : Token length Error ! ({ len_tokens })")
-                return res_text, res_path, res_files, None, None, res_history
-
-            # GPT
-            n += 1
-            self.print(session_id, f" ChatGPT : { model_name }, pass={ n }, tokens={ len_tokens }, ")
-
-            # 結果
-            res_role      = None
-            res_content   = None
-            tool_calls    = []
-
-            # https://community.openai.com/t/has-anyone-managed-to-get-a-tool-call-working-when-stream-true/498867/3
-
-            completions = None
-            if (session_id == '0'):
-                stream = True
-            else:
-                stream = False
-            #try:
-            if True:
+                completions = None
 
                 # OPENAI
                 if (self.openai_api_type != 'azure'):
@@ -1258,7 +1084,7 @@ Please classify and respond using the designated words.
                         null_history = self.history_add(history=[], sysText=sysText, reqText=reqText, inpText=inpText, )
                         msg = self.history2msg_vision(history=null_history, image_urls=image_urls,)
                         completions = self.client_v.chat.completions.create(
-                                model           = model_name,
+                                model           = res_api,
                                 messages        = msg,
                                 max_tokens      = 4000,
                                 timeout         = self.timeOut, 
@@ -1271,7 +1097,7 @@ Please classify and respond using the designated words.
                         for f in range(len(functions)):
                             tools.append({"type": "function", "function": functions[f]})
                         completions = self.client_ab.chat.completions.create(
-                                model           = model_name,
+                                model           = res_api,
                                 messages        = msg,
                                 temperature     = float(temperature),
                                 tools           = tools,
@@ -1283,7 +1109,7 @@ Please classify and respond using the designated words.
                     else:
                         if (jsonMode == False):
                             completions = self.client_ab.chat.completions.create(
-                                model           = model_name,
+                                model           = res_api,
                                 messages        = msg,
                                 temperature     = float(temperature),
                                 timeout         = self.timeOut,
@@ -1291,7 +1117,7 @@ Please classify and respond using the designated words.
                                 )
                         else:
                             completions = self.client_ab.chat.completions.create(
-                                model           = model_name,
+                                model           = res_api,
                                 messages        = msg,
                                 temperature     = float(temperature),
                                 timeout         = self.timeOut, 
@@ -1306,7 +1132,7 @@ Please classify and respond using the designated words.
                         null_history = self.history_add(history=[], sysText=sysText, reqText=reqText, inpText=inpText, )
                         msg = self.history2msg_vision(history=null_history, image_urls=image_urls,)
                         completions = self.client_v.chat.completions.create(
-                                model           = model_name,
+                                model           = res_api,
                                 messages        = msg,
                                 max_tokens      = 4000,
                                 timeout         = self.timeOut,
@@ -1319,7 +1145,7 @@ Please classify and respond using the designated words.
                         for f in range(len(functions)):
                             tools.append({"type": "function", "function": functions[f]})
                         completions = self.client_ab.chat.completions.create(
-                                model           = model_name,
+                                model           = res_api,
                                 messages        = msg,
                                 temperature     = float(temperature),
                                 tools           = tools,
@@ -1331,216 +1157,220 @@ Please classify and respond using the designated words.
                     else:
                         # if (jsonMode == False):
                         completions = self.client_ab.chat.completions.create(
-                                model           = model_name,
+                                model           = res_api,
                                 messages        = msg,
                                 temperature     = float(temperature),
                                 timeout         = self.timeOut,
                                 stream          = stream, 
                                 )
-                        #else:
-                        #    completions = self.client_ab.chat.completions.create(
-                        #        model           = model_name,
-                        #        messages        = msg,
-                        #        temperature     = float(temperature),
-                        #        timeout         = self.timeOut, 
-                        #        response_format = { "type": "json_object" },
-                        #        stream          = stream, 
-                        #        )
+                    #else:
+                    #    completions = self.client_ab.chat.completions.create(
+                    #        model           = res_api,
+                    #        messages        = msg,
+                    #        temperature     = float(temperature),
+                    #        timeout         = self.timeOut, 
+                    #        response_format = { "type": "json_object" },
+                    #        stream          = stream, 
+                    #        )
 
-            # Stream 表示
-            if (stream == True):
-                chkTime     = time.time()
-                for chunk in completions:
-                    if ((time.time() - chkTime) > self.timeOut):
-                        break
-                    delta   = chunk.choices[0].delta
-                    if (delta is not None):
-                        if (delta.content is not None):
-                            #res_role    = delta.role
-                            res_role    = 'assistant'
-                            content     = delta.content
-                            if (res_content is None):
-                                res_content = ''
-                            res_content += content
-                            self.stream(session_id, content)
+                # Stream 表示
+                if (stream == True):
+                    chkTime     = time.time()
+                    for chunk in completions:
+                        if ((time.time() - chkTime) > self.timeOut):
+                            break
+                        delta   = chunk.choices[0].delta
+                        if (delta is not None):
+                            if (delta.content is not None):
+                                #res_role    = delta.role
+                                res_role    = 'assistant'
+                                content     = delta.content
+                                if (res_content is None):
+                                    res_content = ''
+                                res_content += content
+                                self.stream(session_id, content)
 
-                        elif (delta.tool_calls is not None):
-                            #res_role    = delta.role
-                            res_role    = 'assistant'
-                            tcchunklist = delta.tool_calls
-                            for tcchunk in tcchunklist:
-                                if len(tool_calls) <= tcchunk.index:
-                                    tool_calls.append({"id": "", "type": "function", "function": { "name": "", "arguments": "" } })
-                                tc = tool_calls[tcchunk.index]
-                                if tcchunk.id:
-                                    tc["id"]              += tcchunk.id
-                                if tcchunk.function.name:
-                                    tc["function"]["name"] += tcchunk.function.name
-                                if tcchunk.function.arguments:
-                                    tc["function"]["arguments"] += tcchunk.function.arguments
+                            elif (delta.tool_calls is not None):
+                                #res_role    = delta.role
+                                res_role    = 'assistant'
+                                tcchunklist = delta.tool_calls
+                                for tcchunk in tcchunklist:
+                                    if len(tool_calls) <= tcchunk.index:
+                                        tool_calls.append({"id": "", "type": "function", "function": { "name": "", "arguments": "" } })
+                                    tc = tool_calls[tcchunk.index]
+                                    if tcchunk.id:
+                                        tc["id"]              += tcchunk.id
+                                    if tcchunk.function.name:
+                                        tc["function"]["name"] += tcchunk.function.name
+                                    if tcchunk.function.arguments:
+                                        tc["function"]["arguments"] += tcchunk.function.arguments
 
-                # 改行
-                if (res_content is not None):
-                    self.print(session_id, )
- 
-            # completions 結果
-            if (stream == False):
-                try:
-                    res_role    = str(completions.choices[0].message.role)
-                    res_content = str(completions.choices[0].message.content)
-                except:
-                    pass
+                    # 改行
+                    if (res_content is not None):
+                        self.print(session_id, )
+        
+                # completions 結果
+                if (stream == False):
+                    try:
+                        res_role    = str(completions.choices[0].message.role)
+                        res_content = str(completions.choices[0].message.content)
+                    except:
+                        pass
 
-                # 新 function 
-                if (completions.choices[0].finish_reason=='tool_calls'):
-                    for tool_call in completions.choices[0].message.tool_calls:
-                        t_id     = str(tool_call.id)
-                        f_name   = str(tool_call.function.name)
-                        f_kwargs = str(tool_call.function.arguments)
-                        try:
-                            wk_dic      = json.loads(f_kwargs)
-                            wk_text     = json.dumps(wk_dic, ensure_ascii=False, )
-                            f_kwargs = wk_text
-                        except:
-                            pass
-                        tool_calls.append({"id": t_id, "type": "function", "function": { "name": f_name, "arguments": f_kwargs } })
- 
-            # function 指示?
-            if (len(tool_calls) > 0):
-
-                # 自動的にbモデルへ切替
-                if (model_select == 'a'):
-                    if (self.gpt_b_enable == True):
-                        if (self.gpt_b_length != 0):
-                            model_select = 'b'
-
-                self.print(session_id, )
-                for tc in tool_calls:
-                    f_name   = tc['function'].get('name')
-                    f_kwargs = tc['function'].get('arguments')
-
-                    hit = False
-
-                    for module_dic in function_modules:
-                        if (f_name == module_dic['func_name']):
-                            hit = True
-                            self.print(session_id, f" ChatGPT :   function_call '{ module_dic['script'] }' ({ f_name })")
-                            self.print(session_id, f" ChatGPT :   → { f_kwargs }")
-
-                            # メッセージ追加格納
-                            self.seq += 1
-                            dic = {'seq': self.seq, 'time': time.time(), 'role': 'function_call', 'name': f_name, 'content': f_kwargs }
-                            res_history.append(dic)
-
-                            # function 実行
+                    # 新 function 
+                    if (completions.choices[0].finish_reason=='tool_calls'):
+                        for tool_call in completions.choices[0].message.tool_calls:
+                            t_id     = str(tool_call.id)
+                            f_name   = str(tool_call.function.name)
+                            f_kwargs = str(tool_call.function.arguments)
                             try:
-                                ext_func_proc  = module_dic['func_proc']
-                                res_json = ext_func_proc( f_kwargs )
-                            except Exception as e:
-                                print(e)
-                                # エラーメッセージ
-                                dic = {}
-                                dic['error'] = e 
-                                res_json = json.dumps(dic, ensure_ascii=False, )
-
-                            # tool_result
-                            self.print(session_id, f" ChatGPT :   → { res_json }")
-                            self.print(session_id, )
-
-                            # メッセージ追加格納
-                            dic = {'role': 'function', 'name': f_name, 'content': res_json }
-                            msg.append(dic)
-                            self.seq += 1
-                            dic = {'seq': self.seq, 'time': time.time(), 'role': 'function', 'name': f_name, 'content': res_json }
-                            res_history.append(dic)
-
-                            # パス情報確認
-                            try:
-                                dic  = json.loads(res_json)
-                                path = dic['image_path']
-                                if (path is None):
-                                    path = dic.get('excel_path')
-                                if (path is not None):
-                                    res_path = path
-                                    res_files.append(path)
-                                    res_files = list(set(res_files))
+                                wk_dic      = json.loads(f_kwargs)
+                                wk_text     = json.dumps(wk_dic, ensure_ascii=False, )
+                                f_kwargs = wk_text
                             except:
                                 pass
+                            tool_calls.append({"id": t_id, "type": "function", "function": { "name": f_name, "arguments": f_kwargs } })
+        
+                # function 指示?
+                if (len(tool_calls) > 0):
 
+                    # 自動的にbモデルへ切替
+                    if (model_select == 'a'):
+                        if (self.gpt_b_enable == True):
+                            if (self.gpt_b_length != 0):
+                                model_select = 'b'
+
+                    self.print(session_id, )
+                    for tc in tool_calls:
+                        f_name   = tc['function'].get('name')
+                        f_kwargs = tc['function'].get('arguments')
+
+                        hit = False
+
+                        for module_dic in function_modules:
+                            if (f_name == module_dic['func_name']):
+                                hit = True
+                                self.print(session_id, f" ChatGPT :   function_call '{ module_dic['script'] }' ({ f_name })")
+                                self.print(session_id, f" ChatGPT :   → { f_kwargs }")
+
+                                # メッセージ追加格納
+                                self.seq += 1
+                                dic = {'seq': self.seq, 'time': time.time(), 'role': 'function_call', 'name': f_name, 'content': f_kwargs }
+                                res_history.append(dic)
+
+                                # function 実行
+                                try:
+                                    ext_func_proc  = module_dic['func_proc']
+                                    res_json = ext_func_proc( f_kwargs )
+                                except Exception as e:
+                                    print(e)
+                                    # エラーメッセージ
+                                    dic = {}
+                                    dic['error'] = e 
+                                    res_json = json.dumps(dic, ensure_ascii=False, )
+
+                                # tool_result
+                                self.print(session_id, f" ChatGPT :   → { res_json }")
+                                self.print(session_id, )
+
+                                # メッセージ追加格納
+                                dic = {'role': 'function', 'name': f_name, 'content': res_json }
+                                msg.append(dic)
+                                self.seq += 1
+                                dic = {'seq': self.seq, 'time': time.time(), 'role': 'function', 'name': f_name, 'content': res_json }
+                                res_history.append(dic)
+
+                                # パス情報確認
+                                try:
+                                    dic  = json.loads(res_json)
+                                    path = dic['image_path']
+                                    if (path is None):
+                                        path = dic.get('excel_path')
+                                    if (path is not None):
+                                        res_path = path
+                                        res_files.append(path)
+                                        res_files = list(set(res_files))
+                                except:
+                                    pass
+
+                                break
+
+                        if (hit == False):
+                            self.print(session_id, f" ChatGPT :   function_call Error ! ({ f_name })")
+                            print(res_role, res_content, f_name, f_kwargs, )
                             break
 
-                    if (hit == False):
-                        self.print(session_id, f" ChatGPT :   function_call Error ! ({ f_name })")
-                        print(res_role, res_content, f_name, f_kwargs, )
+                # GPT 会話終了
+                elif (res_role == 'assistant') and (res_content is not None):
+                    function_name   = 'exit'
+                    self.print(session_id, f" ChatGPT : { res_name.lower() } complite.")
+
+                    # 自動で(B)モデル(GPT4)実行
+                    if (model_select == 'auto') or (model_select == 'a'):
+                        if (self.gpt_b_enable == True):
+                            if (res_name != self.gpt_b_nick_name):
+                                if (self.gpt_b_length != 0) and (len(res_text) >= self.gpt_b_length):
+                                    res_name2, res_api2, len_tokens = self.checkTokens(session_id=session_id, messages=msg, functions=[], model_select='b', )
+                                    if (res_api2 is not None):
+                                        self.print(session_id, f" ChatGPT : { res_name2.lower() } start.")
+
+                                        try:
+                                            # OPENAI
+                                            if (self.openai_api_type != 'azure'):
+                                                completions2 = self.client_ab.chat.completions.create(
+                                                    model       = res_api2,
+                                                    messages    = msg,
+                                                    temperature = float(temperature),
+                                                    timeout     = self.timeOut, )
+
+                                            # Azure
+                                            else:
+                                                completions2 = self.client_ab.chat.completions.create(
+                                                    model       = res_api2,
+                                                    messages    = msg,
+                                                    temperature = float(temperature),
+                                                    timeout     = self.timeOut, )
+
+                                            res_role2    = str(completions2.choices[0].message.role)
+                                            res_content2 = str(completions2.choices[0].message.content)
+                                            if (res_role2 == 'assistant') and (res_content2 is not None):
+                                                res_name    = res_name2
+                                                res_api     = res_api2
+                                                res_role    = res_role2
+                                                res_content = res_content2
+                                                self.print(session_id, f" ChatGPT : { res_name.lower() } complite.")
+                                        except Exception as e:
+                                            print(e)
+                                            self.print(session_id, f" ChatGPT : { res_name2.lower() } error!")
+
+                    if (res_content is not None):
+                        #self.print(session_id, res_content.rstrip())
+                        res_text += res_content.rstrip() + '\n'
+
+                        # History 追加格納
+                        self.seq += 1
+                        dic = {'seq': self.seq, 'time': time.time(), 'role': res_role, 'name': '', 'content': res_text }
+                        res_history.append(dic)
+
+                    # 予期せぬ回答
+                    else:
+                        self.print(session_id, ' ChatGPT : Error !')
+                        self.print(session_id, f" ChatGPT : role={ res_role }, content={ res_content }, function_name={ function_name }")
+                        try:
+                            self.print(session_id, completions)
+                        except:
+                            pass
                         break
 
-            # GPT 会話終了
-            elif (res_role == 'assistant') and (res_content is not None):
-                function_name   = 'exit'
-                self.print(session_id, f" ChatGPT : { nick_name.lower() } complite.")
+        except Exception as e:
+            print(e)
+            res_text = ''
 
-                # 自動で(B)モデル(GPT4)実行
-                if (model_select == 'auto') or (model_select == 'a'):
-                    if (self.gpt_b_enable == True):
-                        if (nick_name != self.gpt_b_nick_name):
-                            if (self.gpt_b_length != 0) and (len(res_text) >= self.gpt_b_length):
-                                nick_name2, model_name2, len_tokens = self.checkTokens(session_id=session_id, messages=msg, functions=[], model_select='b', )
-                                if (model_name2 is not None):
-                                    self.print(session_id, f" ChatGPT : { nick_name2.lower() } start.")
-
-                                    try:
-                                        # OPENAI
-                                        if (self.openai_api_type != 'azure'):
-                                            completions2 = self.client_ab.chat.completions.create(
-                                                model       = model_name2,
-                                                messages    = msg,
-                                                temperature = float(temperature),
-                                                timeout     = self.timeOut, )
-
-                                        # Azure
-                                        else:
-                                            completions2 = self.client_ab.chat.completions.create(
-                                                model       = model_name2,
-                                                messages    = msg,
-                                                temperature = float(temperature),
-                                                timeout     = self.timeOut, )
-
-                                        res_role2    = str(completions2.choices[0].message.role)
-                                        res_content2 = str(completions2.choices[0].message.content)
-                                        if (res_role2 == 'assistant') and (res_content2 is not None):
-                                            nick_name   = nick_name2
-                                            model_name  = model_name2
-                                            res_role    = res_role2
-                                            res_content = res_content2
-                                            self.print(session_id, f" ChatGPT : { nick_name.lower() } complite.")
-                                    except Exception as e:
-                                        print(e)
-                                        self.print(session_id, f" ChatGPT : { nick_name2.lower() } error!")
-
-                if (res_content is not None):
-                    #self.print(session_id, res_content.rstrip())
-                    res_text += res_content.rstrip() + '\n'
-
-                # History 追加格納
-                self.seq += 1
-                dic = {'seq': self.seq, 'time': time.time(), 'role': res_role, 'name': '', 'content': res_text }
-                res_history.append(dic)
-
-            # 予期せぬ回答
-            else:
-                self.print(session_id, ' ChatGPT : Error !')
-                self.print(session_id, f" ChatGPT : role={ res_role }, content={ res_content }, function_name={ function_name }")
-                try:
-                    self.print(session_id, completions)
-                except:
-                    pass
-                break
-
-        return res_text, res_path, res_files, nick_name, model_name, res_history
+        return res_text, res_path, res_files, res_name, res_api, res_history
 
 
 
-    def vectorStore_del(self, session_id='0', assistant_id=None, assistant_name='', ):
+    def vectorStore_del(self, session_id='admin', assistant_id=None, assistant_name='', ):
 
         # 2024/04/21時点 azure 未対応
         if (self.openai_api_type == 'azure'):
@@ -1565,7 +1395,7 @@ Please classify and respond using the designated words.
         
         return True
 
-    def vectorStore_set(self, session_id='0', retrievalFiles_path='_extensions/retrieval_files/', assistant_id=None, assistant_name='', ):
+    def vectorStore_set(self, session_id='admin', retrievalFiles_path='_extensions/retrieval_files/', assistant_id=None, assistant_name='', ):
         vectorStore_ids = []
 
         # 2024/04/21時点 azure 未対応
@@ -1616,76 +1446,63 @@ Please classify and respond using the designated words.
         # vector store 作成
         if (len(proc_files) > 0):
 
-            # フォルダクリア
-            if (os.path.isdir(qPath_retrieval_work)):
-                shutil.rmtree(qPath_retrieval_work)
-            if (not os.path.isdir(qPath_retrieval_work + assistant_name + '/')):
-                os.makedirs(qPath_retrieval_work + assistant_name + '/')
-
-            # ファイルコピー
-            upload_files = []
-            #upload_ids   = []
-            for f in proc_files:
-                fn = retrievalFiles_path + f
-                file_name = qPath_retrieval_work + assistant_name + '/' + f
-                shutil.copy(fn, file_name)
-                #time.sleep(0.25)
+            # ファイル
+            upload_ids   = []
+            for proc_file in proc_files:
+                file_name = retrievalFiles_path + proc_file
                 if (os.path.isfile(file_name)):
-                    #if (os.path.getsize(file_name) <= 20000000):
-                    file = open(file_name, 'rb')
-                    upload_files.append(file)
-                    self.print(session_id, f" Assistant : Upload file_name = '{ f }',")
 
-                    #try:
-                    #    # アップロード
-                    #    upload = self.client_x.files.create(
-                    #                file    = file,
-                    #                purpose = 'assistants', )
-                    #    print(f" Assistant : Upload file_name = '{ f }', { upload.id }")
-                    #    upload_ids.append(file)
-                    #except Exception as e:
-                    #    print(e)
+                    # アップロード済み確認
+                    file_id = None
+                    assistant_files_list = self.client_x.files.list()
+                    for n in range(len(assistant_files_list.data)):
+                        if (proc_file == assistant_files_list.data[n].filename):
+                            file_id   = assistant_files_list.data[n].id
+                            print(f" Assistant : Hit file_name = '{ proc_file }', { file_id }")
+                            break
 
-             # ベクターストア作成
-            if (len(upload_files) > 0):
+                    # アップロード
+                    if (file_id == None):
+                        try:
+                            # アップロード
+                            file = open(file_name, 'rb')
+                            upload = self.client_x.files.create(
+                                        file    = file,
+                                        purpose = 'assistants', )
+                            file_id = upload.id
+                            print(f" Assistant : Upload file_name = '{ proc_file }', { file_id }")
+                        except Exception as e:
+                            print(e)
+
+                    if (file_id != None):
+                        upload_ids.append(file_id)
+
+            # ベクターストア作成
+            if (len(upload_ids) > 0):
                 try:
-
-                    #vector_store = self.client_x.beta.vector_stores.create(
-                    #                name          = assistant_name,
-                    #                file_ids      = upload_ids,
-                    #                expires_after = {
-                    #                    "anchor": "last_active_at",
-                    #                    "days": 7
-                    #                    }
-                    #                )
 
                     vector_store = self.client_x.beta.vector_stores.create(
                                         name = assistant_name,
                                         expires_after = {
                                         "anchor": "last_active_at",
-                                        "days": 7
+                                        "days": 2
                                         }
                                     )
-                    vectorStore_ids = [vector_store.id]
 
-                    # proc? wait
-                    #time.sleep(0.50)
-
-                    file_batch = self.client_x.beta.vector_stores.file_batches.upload_and_poll(
+                    file_batch = self.client_x.beta.vector_stores.file_batches.create_and_poll(
                                         vector_store_id = vector_store.id,
-                                        files            = upload_files,
+                                        file_ids        = upload_ids,
                                     )
 
-                    # proc? wait
-                    #time.sleep(2.00 * len(upload_files))
-
                     self.print(session_id, f" Assistant : { file_batch.status }")
+
+                    vectorStore_ids = [vector_store.id]
 
                 except Exception as e:
                     print(e)
 
         # デバッグ用 アップロード確認
-        if (False):
+        if False:
             vector_stores = self.client_x.beta.vector_stores.list()
             for v in range(len(vector_stores.data)):
                 vs_id   = vector_stores.data[v].id
@@ -1702,7 +1519,7 @@ Please classify and respond using the designated words.
 
         return vectorStore_ids
 
-    def threadFile_del(self, session_id='0', assistant_id=None, assistant_name='', ):
+    def threadFile_del(self, session_id='admin', assistant_id=None, assistant_name='', ):
 
         # 2024/04/21時点 azure 未対応
         if (self.openai_api_type == 'azure'):
@@ -1720,7 +1537,7 @@ Please classify and respond using the designated words.
 
         return True
 
-    def threadFile_set(self, session_id='0', upload_files=[], assistant_id=None, assistant_name='', ):
+    def threadFile_set(self, session_id='admin', upload_files=[], assistant_id=None, assistant_name='', ):
         upload_ids = []
 
         # 2024/04/21時点 azure 未対応
@@ -1755,7 +1572,7 @@ Please classify and respond using the designated words.
 
         return upload_ids
 
-    def threadFile_reset(self, session_id='0', upload_ids=[], assistant_id=None, assistant_name='', ):
+    def threadFile_reset(self, session_id='admin', upload_ids=[], assistant_id=None, assistant_name='', ):
 
         # 2024/04/21時点 azure 未対応
         if (self.openai_api_type == 'azure'):
@@ -1772,7 +1589,7 @@ Please classify and respond using the designated words.
 
         return True
 
-    def my_assistant_update(self, session_id='0', my_assistant_id=None, my_assistant_name='',
+    def my_assistant_update(self, session_id='admin', my_assistant_id=None, my_assistant_name='',
                             model_name='gpt-4o', instructions='', 
                             functions=[], vectorStore_ids=[], upload_ids=[], ):
 
@@ -1873,10 +1690,10 @@ Please classify and respond using the designated words.
 
     def run_assistant(self, chat_class='assistant', model_select='auto',
                       nick_name=None, model_name=None,
-                      session_id='0', history=[], function_modules=[],
+                      session_id='admin', history=[], function_modules=[],
                       sysText=None, reqText=None, inpText='こんにちは',
                       upload_files=[], image_urls=[],
-                      temperature=0.8, maxStep=10, jsonMode=False, ):
+                      temperature=0.8, max_step=10, jsonMode=False, ):
 
         functions = []
         for module_dic in function_modules:
@@ -1908,13 +1725,21 @@ Please classify and respond using the designated words.
         if (self.gpt_v_nick_name != ''):
             if (inpText.strip()[:len(self.gpt_v_nick_name)+1].lower() == (self.gpt_v_nick_name.lower() + ',')):
                 inpText = inpText.strip()[len(self.gpt_v_nick_name)+1:]
-        if (inpText.strip()[:7].lower() == ('vision,')):
-            inpText = inpText.strip()[7:]
         if (self.gpt_x_nick_name != ''):
             if (inpText.strip()[:len(self.gpt_x_nick_name)+1].lower() == (self.gpt_x_nick_name.lower() + ',')):
                 inpText = inpText.strip()[len(self.gpt_x_nick_name)+1:]
-        if (inpText.strip()[:5].lower() == ('riki,')):
+        if   (inpText.strip()[:5].lower() == ('riki,')):
             inpText = inpText.strip()[5:]
+        elif (inpText.strip()[:7].lower() == ('vision,')):
+            inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:10].lower() == ('assistant,')):
+            inpText = inpText.strip()[10:]
+        elif (inpText.strip()[:7].lower() == ('openai,')):
+            inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:7].lower() == ('google,')):
+            inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:7].lower() == ('gemini,')):
+            inpText = inpText.strip()[7:]
 
         # history 追加・圧縮 (古いメッセージ)
         res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )
@@ -1923,7 +1748,6 @@ Please classify and respond using the designated words.
         # 結果
         res_role      = None
         res_content   = None
-        download_hit  = False
 
         upload_ids    = []
 
@@ -2050,318 +1874,321 @@ Please classify and respond using the designated words.
             role      = 'user',
             content   = inpText, )
 
-        # 実行開始
-        if (session_id == '0'):
-            # 初期化
-            my_handler = my_eventHandler(log_queue=self.log_queue, my_seq=self.seq,
-                                         auto_continue=self.auto_continue, max_step=maxStep,
-                                         my_client=self.client_x, 
-                                         my_assistant_id=my_assistant_id, my_assistant_name=my_assistant_name,
-                                         my_thread_id=my_thread_id,
-                                         session_id=session_id, res_history=res_history, function_modules=function_modules,
-                                         res_text=res_text, res_path=res_path, res_files=res_files, 
-                                         upload_files=upload_files, upload_flag=False, )
-
-            # 実行
-            with self.client_x.beta.threads.runs.stream(
-                assistant_id = my_assistant_id,
-                thread_id    = my_thread_id,
-                event_handler=my_handler,
-            ) as stream:
-                stream.until_done()
-
-            self.seq     = my_handler.my_seq
-            res_history  = my_handler.res_history
-            res_text     = my_handler.res_text
-            res_path     = my_handler.res_path
-            res_files    = my_handler.res_files
-            upload_files = my_handler.upload_files
-            upload_flag  = my_handler.upload_flag
-
-            res_role     = 'assistant'
-
-            if (upload_flag == True):
-
-                # アシスタント更新
-                res = self.my_assistant_update(session_id        = session_id,
-                                               my_assistant_id   = my_assistant_id,
-                                               my_assistant_name = my_assistant_name,
-                                               model_name        = model_name, 
-                                               instructions      = instructions, 
-                                               functions         = functions,
-                                               vectorStore_ids   = vectorStore_ids,
-                                               upload_ids        = upload_ids, )
-
-            # 終了待機
-            exit_status = my_handler.my_run_status
-
+        # ストリーム実行?
+        if (session_id == 'admin'):
+            stream = True
         else:
-            # 実行開始
-            run = self.client_x.beta.threads.runs.create(
-                assistant_id = my_assistant_id,
-                thread_id    = my_thread_id, )
-            my_run_id = run.id
+            stream = False
 
-            # 実行ループ
-            exit_status    = None
-            last_status    = None
-            count_run_step = 0
-            messages = self.client_x.beta.threads.messages.list(
-                    thread_id = my_thread_id, 
-                    order     = 'asc', )
-            last_msg_step = len(messages.data) # First msg is request
-            last_message  = None
-            
-            chkTime       = time.time()
-            while (exit_status is None) and ((time.time() - chkTime) < (self.timeOut * 5)):
+        # 実行開始
+        try:
+            if (stream == True):
+                # 初期化
+                my_handler = my_eventHandler(log_queue=self.log_queue, my_seq=self.seq,
+                                            auto_continue=self.auto_continue, max_step=max_step,
+                                            my_client=self.client_x, 
+                                            my_assistant_id=my_assistant_id, my_assistant_name=my_assistant_name,
+                                            my_thread_id=my_thread_id,
+                                            session_id=session_id, res_history=res_history, function_modules=function_modules,
+                                            res_text=res_text, res_path=res_path, res_files=res_files, 
+                                            upload_files=upload_files, upload_flag=False, )
 
-                # ステータス
-                run = self.client_x.beta.threads.runs.retrieve(
-                    thread_id = my_thread_id,
-                    run_id    = my_run_id, )
-                if (run.status != last_status):
-                    last_status = run.status
-                    chkTime     = time.time()
-                    self.print(session_id, f" Assistant : { last_status }")
+                # 実行
+                try:
+                    with self.client_x.beta.threads.runs.stream(
+                        assistant_id = my_assistant_id,
+                        thread_id    = my_thread_id,
+                        event_handler=my_handler,
+                    ) as stream:
+                        stream.until_done()
+                except Exception as e:
+                    print(e)
 
-                # 完了時は少し待機
-                #if (last_status == 'completed'):
-                #    time.sleep(0.25)
+                self.seq     = my_handler.my_seq
+                res_history  = my_handler.res_history
+                res_text     = my_handler.res_text
+                res_path     = my_handler.res_path
+                res_files    = my_handler.res_files
+                upload_files = my_handler.upload_files
+                upload_flag  = my_handler.upload_flag
 
-                # 実行ステップ確認
-                #time.sleep(0.25)
-                run_steps = self.client_x.beta.threads.runs.steps.list(
-                        thread_id = my_thread_id,
-                        run_id    = my_run_id,
-                        order     = 'asc', )
-                if (len(run_steps.data) > count_run_step):
-                    for r in range(count_run_step, len(run_steps.data)):
-                        step_details_type = run_steps.data[r].step_details.type
-                        if (step_details_type != 'tool_calls'):
-                            self.print(session_id, f" Assistant : ({ step_details_type })")
-                        else:
-                            #self.print(session_id, run_steps.data[r].step_details)
-                            step_details_tool_type = None
-                            try:
-                                step_details_tool_type = run_steps.data[r].step_details.tool_calls[0].type
-                            except:
-                                try:
-                                    tc = run_steps.data[r].step_details.tool_calls[0]
-                                    step_details_tool_type = tc.get('type')
-                                except:
-                                    pass
-                            if (step_details_tool_type is not None):
-                                self.print(session_id, f" Assistant : ({ step_details_tool_type }...)")
-                            else:
-                                self.print(session_id, f" Assistant : ({ step_details_type })")
+                res_role     = 'assistant'
 
-                        if (step_details_type == 'message_creation'):
-                            message_id = run_steps.data[r].step_details.message_creation.message_id
-                            if (message_id is not None):
-                                messages = self.client_x.beta.threads.messages.retrieve(
-                                        thread_id  = my_thread_id, 
-                                        message_id = message_id, )
-                                for c in range(len(messages.content)):
-                                    content_type = messages.content[c].type
-                                    if (content_type == 'text'):
-                                        content_value = messages.content[c].text.value
-                                        if (content_value is not None) and (content_value != ''):
-                                            if (last_status != 'completed'):
-                                                if (content_value != last_message):
-                                                    last_message = content_value 
-                                                    self.print(session_id, last_message)
-                                                    self.print(session_id, )
+                if (upload_flag == True):
 
-                    count_run_step = len(run_steps.data)
+                    # アシスタント更新
+                    res = self.my_assistant_update(session_id        = session_id,
+                                                my_assistant_id   = my_assistant_id,
+                                                my_assistant_name = my_assistant_name,
+                                                model_name        = model_name, 
+                                                instructions      = instructions, 
+                                                functions         = functions,
+                                                vectorStore_ids   = vectorStore_ids,
+                                                upload_ids        = upload_ids, )
 
-                # 最大ステップ  10step x (3auto+1) / 2 = 20
-                limit_step = int((int(maxStep) * (int(self.auto_continue)+1)) / 2)
-                if (count_run_step > limit_step):
-                    exit_status = 'overstep'
-                    self.print(session_id, f" Assistant : overstep! (n={ count_run_step }!)")
-                    break
+                # 終了待機
+                exit_status = my_handler.my_run_status
 
-                # 実行メッセージ確認
-                #time.sleep(0.25)
+            else:
+                # 実行開始
+                run = self.client_x.beta.threads.runs.create(
+                    assistant_id = my_assistant_id,
+                    thread_id    = my_thread_id, )
+                my_run_id = run.id
+
+                # 実行ループ
+                exit_status    = None
+                last_status    = None
+                count_run_step = 0
                 messages = self.client_x.beta.threads.messages.list(
                         thread_id = my_thread_id, 
                         order     = 'asc', )
-                if (len(messages.data) > last_msg_step):
-                    for m in range(last_msg_step, len(messages.data)):
+                last_msg_step = len(messages.data) # First msg is request
+                last_message  = None
+                
+                chkTime       = time.time()
+                while (exit_status is None) and ((time.time() - chkTime) < (self.timeOut * 5)):
 
-                        res_role = messages.data[m].role
-                        for c in range(len(messages.data[m].content)):
-                            content_type = messages.data[m].content[c].type
-                            if (content_type == 'image_file'):
-                                file_type   = content_type
-                                file_id     = messages.data[m].content[c].image_file.file_id
-                                if (file_id is not None):
-                                    self.print(session_id, f" Assistant : ( { file_type }, { file_id } )")
+                    # ステータス
+                    run = self.client_x.beta.threads.runs.retrieve(
+                        thread_id = my_thread_id,
+                        run_id    = my_run_id, )
+                    if (run.status != last_status):
+                        last_status = run.status
+                        chkTime     = time.time()
+                        self.print(session_id, f" Assistant : { last_status }")
 
-                            if (content_type == 'text'):
-                                content_value = messages.data[m].content[c].text.value
-                                if (content_value is not None) and (content_value != ''):
-                                    last_msg_step = m
-                                    if (last_status != 'completed'):
-                                        if (content_value != last_message):
-                                            last_message = content_value 
-                                            self.print(session_id, last_message)
-                                            self.print(session_id, )
-                                    else:
-                                        res_content  = content_value
+                    # 完了時は少し待機
+                    #if (last_status == 'completed'):
+                    #    time.sleep(0.25)
 
-                                if (messages.data[m].content[c].text.annotations is not None):
+                    # 実行ステップ確認
+                    #time.sleep(0.25)
+                    run_steps = self.client_x.beta.threads.runs.steps.list(
+                            thread_id = my_thread_id,
+                            run_id    = my_run_id,
+                            order     = 'asc', )
+                    if (len(run_steps.data) > count_run_step):
+                        for r in range(count_run_step, len(run_steps.data)):
+                            step_details_type = run_steps.data[r].step_details.type
+                            if (step_details_type != 'tool_calls'):
+                                self.print(session_id, f" Assistant : ({ step_details_type })")
+                            else:
+                                #self.print(session_id, run_steps.data[r].step_details)
+                                step_details_tool_type = None
+                                try:
+                                    step_details_tool_type = run_steps.data[r].step_details.tool_calls[0].type
+                                except:
+                                    try:
+                                        tc = run_steps.data[r].step_details.tool_calls[0]
+                                        step_details_tool_type = tc.get('type')
+                                    except:
+                                        pass
+                                if (step_details_tool_type is not None):
+                                    self.print(session_id, f" Assistant : ({ step_details_tool_type }...)")
+                                else:
+                                    self.print(session_id, f" Assistant : ({ step_details_type })")
+
+                            if (step_details_type == 'message_creation'):
+                                message_id = run_steps.data[r].step_details.message_creation.message_id
+                                if (message_id is not None):
+                                    messages = self.client_x.beta.threads.messages.retrieve(
+                                            thread_id  = my_thread_id, 
+                                            message_id = message_id, )
+                                    for c in range(len(messages.content)):
+                                        content_type = messages.content[c].type
+                                        if (content_type == 'text'):
+                                            content_value = messages.content[c].text.value
+                                            if (content_value is not None) and (content_value != ''):
+                                                if (last_status != 'completed'):
+                                                    if (content_value != last_message):
+                                                        last_message = content_value 
+                                                        self.print(session_id, last_message)
+                                                        self.print(session_id, )
+
+                        count_run_step = len(run_steps.data)
+
+                    # 最大ステップ  10step x (3auto+1) / 2 = 20
+                    limit_step = int((int(max_step) * (int(self.auto_continue)+1)) / 2)
+                    if (count_run_step > limit_step):
+                        exit_status = 'overstep'
+                        self.print(session_id, f" Assistant : overstep! (n={ count_run_step }!)")
+                        break
+
+                    # 実行メッセージ確認
+                    #time.sleep(0.25)
+                    messages = self.client_x.beta.threads.messages.list(
+                            thread_id = my_thread_id, 
+                            order     = 'asc', )
+                    if (len(messages.data) > last_msg_step):
+                        for m in range(last_msg_step, len(messages.data)):
+
+                            res_role = messages.data[m].role
+                            for c in range(len(messages.data[m].content)):
+                                content_type = messages.data[m].content[c].type
+                                #if (content_type == 'image_file'):
+                                #    file_type   = content_type
+                                #    file_id     = messages.data[m].content[c].image_file.file_id
+                                #    if (file_id is not None):
+                                #        self.print(session_id, f" Assistant : ( { file_type }, { file_id } )")
+
+                                if (content_type == 'text'):
+                                    content_value = messages.data[m].content[c].text.value
+                                    if (content_value is not None) and (content_value != ''):
+                                        last_msg_step = m
+                                        if (last_status != 'completed'):
+                                            if (content_value != last_message):
+                                                last_message = content_value 
+                                                self.print(session_id, last_message)
+                                                self.print(session_id, )
+                                        else:
+                                            res_content  = content_value
+
                                     for a in range(len(messages.data[m].content[c].text.annotations)):
-                                        file_type = messages.data[m].content[c].text.annotations[a].type
-                                        file_text = messages.data[m].content[c].text.annotations[a].text
-                                        file_id   = None
                                         try:
-                                            file_id = messages.data[m].content[c].text.annotations[a].file_path.file_id
-                                        except Exception as e:
-                                            pass
-                                            #self.print(session_id, messages.data[m].content[c].text.annotations[a])
-                                            #print(e)
+                                            file_type = messages.data[m].content[c].text.annotations[a].type
+                                            file_text = messages.data[m].content[c].text.annotations[a].text
+                                            file_id   = messages.data[m].content[c].text.annotations[a].file_path.file_id
 
-                                        #self.print(session_id, ' Assistant :', file_type, file_text, file_id, )
+                                            file_dic  = self.client_x.files.retrieve(file_id)
+                                            filename = os.path.basename(file_dic.filename)
+                                            content_file = self.client_x.files.content(file_id)
+                                            data_bytes   = content_file.read()
+                                            with open(qPath_output + filename, "wb") as file:
+                                                file.write(data_bytes)
 
-                                        try:
-                                            if (file_id is not None):
-
-                                                file_dic  = self.client_x.files.retrieve(file_id)
-                                                filename = os.path.basename(file_dic.filename)
-                                                content_file = self.client_x.files.content(file_id)
-                                                data_bytes   = content_file.read()
-                                                with open(qPath_output + filename, "wb") as file:
-                                                    file.write(data_bytes)
-                                                self.print(session_id, f" Assistant : Download ... { file_text }")
-
-                                                download_hit = True
+                                            res_path = qPath_output + filename
+                                            self.print(session_id, f" Assistant : Download ... { file_text }")
                                         except:
                                             pass
 
-                # 処理中
-                if   (last_status == 'in_progress') \
-                or   (last_status == 'queued') \
-                or   (last_status == 'cancelling'):
-                    pass
+                    # 処理中
+                    if   (last_status == 'in_progress') \
+                    or   (last_status == 'queued') \
+                    or   (last_status == 'cancelling'):
+                        pass
 
-                # 終了
-                elif (last_status == 'completed') \
-                or   (last_status == 'cancelled') \
-                or   (last_status == 'failed') \
-                or   (last_status == 'expired'):
-                    exit_status = last_status
+                    # 終了
+                    elif (last_status == 'completed') \
+                    or   (last_status == 'cancelled') \
+                    or   (last_status == 'failed') \
+                    or   (last_status == 'expired'):
+                        exit_status = last_status
 
-                    # 正常終了
-                    if (last_status == 'completed'):
-                        break
+                        # 正常終了
+                        if (last_status == 'completed'):
+                            break
 
-                    # その他終了
-                    else:
-                        self.print(session_id, ' Assistant : !')
-                        break
+                        # その他終了
+                        else:
+                            self.print(session_id, ' Assistant : !')
+                            break
 
-                # ファンクション
-                elif (last_status == 'requires_action'):
-                    tool_result = []
-                    upload_flag = False
+                    # ファンクション
+                    elif (last_status == 'requires_action'):
+                        tool_result = []
+                        upload_flag = False
 
-                    self.print(session_id, )
-                    tool_calls = run.required_action.submit_tool_outputs.tool_calls
-                    for t in range(len(tool_calls)):
-                        tool_call_id  = tool_calls[t].id
-                        function_name = tool_calls[t].function.name
-                        json_kwargs   = tool_calls[t].function.arguments
-
-                        hit = False
-                        for module_dic in function_modules:
-                            if (function_name == module_dic['func_name']):
-                                hit = True
-                                self.print(session_id, f" Assistant :   function_call '{ module_dic['script'] }' ({  function_name })")
-                                self.print(session_id, f" Assistant :   → { json_kwargs }")
-
-                                chkTime     = time.time()
-
-                                # メッセージ追加格納
-                                self.seq += 1
-                                dic = {'seq': self.seq, 'time': time.time(), 'role': 'function_call', 'name': function_name, 'content': json_kwargs }
-                                res_history.append(dic)
-
-                                # function 実行
-                                try:
-                                    ext_func_proc  = module_dic['func_proc']
-                                    res_json       = ext_func_proc( json_kwargs )
-                                except Exception as e:
-                                    print(e)
-                                    # エラーメッセージ
-                                    dic = {}
-                                    dic['error'] = e 
-                                    res_json = json.dumps(dic, ensure_ascii=False, )
-
-                                chkTime     = time.time()
-
-                                # メッセージ追加格納
-                                self.seq += 1
-                                dic = {'seq': self.seq, 'time': time.time(), 'role': 'function', 'name': function_name, 'content': res_json }
-                                res_history.append(dic)
-
-                                # パス情報確認
-                                try:
-                                    dic  = json.loads(res_json)
-                                    path = dic.get('image_path')
-                                    if (path is None):
-                                        path = dic.get('excel_path')
-                                    if (path is not None):
-                                        res_path = path
-                                        res_files.append(path)
-                                        upload_files.append(path)
-                                        res_files    = list(set(res_files))
-                                        upload_files = list(set(upload_files))
-
-                                        # ファイルアップロード
-                                        upload_ids = self.threadFile_set(session_id     = session_id,
-                                                                         upload_files   = upload_files,
-                                                                         assistant_id   = my_assistant_id,
-                                                                         assistant_name = my_assistant_name, )
-                                        upload_flag = True
-
-                                except Exception as e:
-                                    print(e)
-
-                        if (hit == False):
-                            self.print(session_id, f" Assistant :   function_call Error ! ({ function_name })")
-                            self.print(session_id, json_kwargs, )
-
-                            dic = {}
-                            dic['result'] = 'error' 
-                            res_json = json.dumps(dic, ensure_ascii=False, )
-
-                        # tool_result
-                        self.print(session_id, f" Assistant :   → { res_json }")
                         self.print(session_id, )
-                        tool_result.append({"tool_call_id": tool_call_id, "output": res_json})
+                        tool_calls = run.required_action.submit_tool_outputs.tool_calls
+                        for t in range(len(tool_calls)):
+                            tool_call_id  = tool_calls[t].id
+                            function_name = tool_calls[t].function.name
+                            json_kwargs   = tool_calls[t].function.arguments
 
-                    # 結果通知
-                    run = self.client_x.beta.threads.runs.submit_tool_outputs(
-                        thread_id    = my_thread_id,
-                        run_id       = my_run_id,
-                        tool_outputs = tool_result, )
+                            hit = False
+                            for module_dic in function_modules:
+                                if (function_name == module_dic['func_name']):
+                                    hit = True
+                                    self.print(session_id, f" Assistant :   function_call '{ module_dic['script'] }' ({  function_name })")
+                                    self.print(session_id, f" Assistant :   → { json_kwargs }")
 
-                    # アシスタント更新
-                    if (upload_flag == True):
-                        res = self.my_assistant_update(session_id        = session_id,
-                                                       my_assistant_id   = my_assistant_id,
-                                                       my_assistant_name = my_assistant_name,
-                                                       model_name        = model_name, 
-                                                       instructions      = instructions, 
-                                                       functions         = functions,
-                                                       vectorStore_ids   = vectorStore_ids,
-                                                       upload_ids        = upload_ids, )
+                                    chkTime     = time.time()
 
-                else:
-                    self.print(session_id, run)
-                    self.print(session_id, )
-                    #time.sleep(0.50)
+                                    # メッセージ追加格納
+                                    self.seq += 1
+                                    dic = {'seq': self.seq, 'time': time.time(), 'role': 'function_call', 'name': function_name, 'content': json_kwargs }
+                                    res_history.append(dic)
+
+                                    # function 実行
+                                    try:
+                                        ext_func_proc  = module_dic['func_proc']
+                                        res_json       = ext_func_proc( json_kwargs )
+                                    except Exception as e:
+                                        print(e)
+                                        # エラーメッセージ
+                                        dic = {}
+                                        dic['error'] = e 
+                                        res_json = json.dumps(dic, ensure_ascii=False, )
+
+                                    chkTime     = time.time()
+
+                                    # メッセージ追加格納
+                                    self.seq += 1
+                                    dic = {'seq': self.seq, 'time': time.time(), 'role': 'function', 'name': function_name, 'content': res_json }
+                                    res_history.append(dic)
+
+                                    # パス情報確認
+                                    try:
+                                        dic  = json.loads(res_json)
+                                        path = dic.get('image_path')
+                                        if (path is None):
+                                            path = dic.get('excel_path')
+                                        if (path is not None):
+                                            res_path = path
+                                            res_files.append(path)
+                                            upload_files.append(path)
+                                            res_files    = list(set(res_files))
+                                            upload_files = list(set(upload_files))
+
+                                            # ファイルアップロード
+                                            upload_ids = self.threadFile_set(session_id     = session_id,
+                                                                            upload_files   = upload_files,
+                                                                            assistant_id   = my_assistant_id,
+                                                                            assistant_name = my_assistant_name, )
+                                            upload_flag = True
+
+                                    except Exception as e:
+                                        print(e)
+
+                            if (hit == False):
+                                self.print(session_id, f" Assistant :   function_call Error ! ({ function_name })")
+                                self.print(session_id, json_kwargs, )
+
+                                dic = {}
+                                dic['result'] = 'error' 
+                                res_json = json.dumps(dic, ensure_ascii=False, )
+
+                            # tool_result
+                            self.print(session_id, f" Assistant :   → { res_json }")
+                            self.print(session_id, )
+                            tool_result.append({"tool_call_id": tool_call_id, "output": res_json})
+
+                        # 結果通知
+                        run = self.client_x.beta.threads.runs.submit_tool_outputs(
+                            thread_id    = my_thread_id,
+                            run_id       = my_run_id,
+                            tool_outputs = tool_result, )
+
+                        # アシスタント更新
+                        if (upload_flag == True):
+                            res = self.my_assistant_update(session_id        = session_id,
+                                                        my_assistant_id   = my_assistant_id,
+                                                        my_assistant_name = my_assistant_name,
+                                                        model_name        = model_name, 
+                                                        instructions      = instructions, 
+                                                        functions         = functions,
+                                                        vectorStore_ids   = vectorStore_ids,
+                                                        upload_ids        = upload_ids, )
+
+                    else:
+                        self.print(session_id, run)
+                        self.print(session_id, )
+                        #time.sleep(0.50)
+
+        except Exception as e:
+            print(e)
+            res_content = None
 
         if (exit_status is None):
             exit_status = 'timeout'
@@ -2374,9 +2201,6 @@ Please classify and respond using the designated words.
             if (res_content is not None):
                 #self.print(session_id, res_content.rstrip())
                 res_text += res_content.rstrip() + '\n'
-
-            if (download_hit == True):
-                res_text += '\n' + '※ OpenAI API (beta版 2023/11/18時点)で、ダウンロードは安定？しているようです。' + '\n'
 
             # History 追加格納
             self.seq += 1
@@ -2392,24 +2216,24 @@ Please classify and respond using the designated words.
             dic = {'seq': self.seq, 'time': time.time(), 'role': 'assistant', 'name': '', 'content': exit_status }
             res_history.append(dic)
 
-            # 実行キャンセル
-            runs = self.client_x.beta.threads.runs.list(
-                thread_id = my_thread_id, )
-            for r in range(len(runs.data)):
-                run_id     = runs.data[r].id
-                run_status = runs.data[r].status
-                if  (run_status != 'completed') \
-                and (run_status != 'cancelled') \
-                and (run_status != 'failed') \
-                and (run_status != 'expired') \
-                and (run_status != 'cancelling'):
-                    try:
-                        run = self.client_x.beta.threads.runs.cancel(
-                            thread_id = my_thread_id, 
-                            run_id    = run_id, )
-                        self.print(session_id, f" Assistant : run cancel ... { run_id }")
-                    except:
-                        pass
+        # 実行キャンセル
+        runs = self.client_x.beta.threads.runs.list(
+            thread_id = my_thread_id, )
+        for r in range(len(runs.data)):
+            run_id     = runs.data[r].id
+            run_status = runs.data[r].status
+            if  (run_status != 'completed') \
+            and (run_status != 'cancelled') \
+            and (run_status != 'failed') \
+            and (run_status != 'expired') \
+            and (run_status != 'cancelling'):
+                try:
+                    run = self.client_x.beta.threads.runs.cancel(
+                        thread_id = my_thread_id, 
+                        run_id    = run_id, )
+                    self.print(session_id, f" Assistant : run cancel ... { run_id }")
+                except:
+                    pass
 
         # ファイル削除
         #res = self.threadFile_reset(session_id     = session_id,
@@ -2424,10 +2248,10 @@ Please classify and respond using the designated words.
 
     def auto_assistant(self, chat_class='chat', model_select='auto',
                       nick_name=None, model_name=None,
-                      session_id='0', history=[], function_modules=[], 
+                      session_id='admin', history=[], function_modules=[], 
                       sysText=None, reqText=None, inpText='こんにちは',
                       upload_files=[], image_urls=[],
-                      temperature=0.8, maxStep=10, jsonMode=False, ):
+                      temperature=0.8, max_step=10, jsonMode=False, ):
 
         # 戻り値
         res_text    = ''
@@ -2464,20 +2288,25 @@ Please classify and respond using the designated words.
         if (self.gpt_v_nick_name != ''):
             if (inpText.strip()[:len(self.gpt_v_nick_name)+1].lower() == (self.gpt_v_nick_name.lower() + ',')):
                 inpText = inpText.strip()[len(self.gpt_v_nick_name)+1:]
-        if (inpText.strip()[:7].lower() == ('vision,')):
-            inpText = inpText.strip()[7:]
         if (self.gpt_x_nick_name != ''):
             if (inpText.strip()[:len(self.gpt_x_nick_name)+1].lower() == (self.gpt_x_nick_name.lower() + ',')):
                 inpText = inpText.strip()[len(self.gpt_x_nick_name)+1:]
         if (inpText.strip()[:5].lower() == ('riki,')):
             inpText = inpText.strip()[5:]
+        if (inpText.strip()[:7].lower() == ('vision,')):
+            inpText = inpText.strip()[7:]
+        if (inpText.strip()[:10].lower() == ('assistant,')):
+            inpText = inpText.strip()[10:]
+        if (inpText.strip()[:7].lower() == ('openai,')):
+            inpText = inpText.strip()[7:]
 
         # history 圧縮 (最後４つ残す)
         old_history = self.history_zip2(history=history, )
 
 # ----- あなたの役割 -----
 # あなたは、会話履歴と最後のユーザーの要求、ＡＩ応答から、継続実行の必要性、回答評価を行います。
-# 回答はjson形式で、continue,result_point,assessment_textで行います。
+# 回答は以下のjsonスキーマ形式でお願いします。
+# '{"continue": str, "result_point": str, "assessment_text": str,}'
 #
 # ----- あなたへの依頼 -----
 # 継続実行の必要性はcontinueとして、no,yes,stopで回答してください。(例) yes
@@ -2492,8 +2321,9 @@ Please classify and respond using the designated words.
         auto_sysText = \
 """
 ----- Your Role -----
-You are responsible for assessing the necessity of continued execution, and evaluating responses based on the conversation history, the user's last request, and the AI's response.
-Please provide your answers in JSON format, using the keys "continue," "result_point," and "assessment_text."
+You will evaluate the necessity of continuing execution and the response evaluation based on the conversation history, the last user request, and the AI response.
+Please provide your answer in the following JSON schema format.
+'{"continue": str, "result_point": str, "assessment_text": str,}'
 """ + '\n\n'
         auto_reqText = \
 """
@@ -2509,26 +2339,19 @@ Respond according to the following criteria:
 
         # ユーザー要求
         auto_inpText = ''
-        if  (self.last_input_class == 'continue') \
-        and (self.last_auto_inpText is not None):
-            auto_inpText = self.last_auto_inpText
-
-        else:
-            if (len(old_history) > 2):
-                auto_inpText = '----- 会話履歴 -----' + '\n'
-                for m in range(len(old_history) - 1):
-                    role    = str(old_history[m].get('role', ''))
-                    content = str(old_history[m].get('content', ''))
-                    name    = str(old_history[m].get('name', ''))
-                    if (role != 'system'):
-                        # 全てユーザーメッセージにて処理
-                        if (name is None) or (name == ''):
-                            auto_inpText += '(' + role + ')' + '\n'
-                            auto_inpText += content + '\n\n'
+        if (len(old_history) > 2):
+            auto_inpText = '----- 会話履歴 -----' + '\n'
+            for m in range(len(old_history) - 1):
+                role    = str(old_history[m].get('role', ''))
+                content = str(old_history[m].get('content', ''))
+                name    = str(old_history[m].get('name', ''))
+                if (role != 'system'):
+                    # 全てユーザーメッセージにて処理
+                    if (name is None) or (name == ''):
+                        auto_inpText += '(' + role + ')' + '\n'
+                        auto_inpText += content + '\n\n'
             auto_inpText += '----- 最後のユーザー入力 -----' + '\n'
-            auto_inpText += inpText + '\n\n'
-
-        self.last_auto_inpText = auto_inpText
+        auto_inpText += inpText + '\n\n'
 
         # 実行ループ
         n = 0
@@ -2548,7 +2371,7 @@ Respond according to the following criteria:
                                        session_id=session_id, history=res_history, function_modules=function_modules, 
                                        sysText=sysText, reqText=reqText, inpText=inpText,
                                        upload_files=upload_files, image_urls=image_urls,
-                                       temperature=temperature, maxStep=maxStep, jsonMode=jsonMode, )
+                                       temperature=temperature, max_step=max_step, jsonMode=jsonMode, )
             
             # Azure
             else:
@@ -2560,7 +2383,7 @@ Respond according to the following criteria:
                                        session_id=session_id, history=res_history, function_modules=function_modules,
                                        sysText=sysText, reqText=reqText, inpText=inpText,
                                        upload_files=upload_files, image_urls=image_urls, 
-                                       temperature=temperature, maxStep=maxStep, jsonMode=jsonMode, )
+                                       temperature=temperature, max_step=max_step, jsonMode=jsonMode, )
 
             if  (res_text2 is not None) \
             and (res_text2 != '') \
@@ -2642,10 +2465,10 @@ Respond according to the following criteria:
 
 
     def chatBot(self, chat_class='auto', model_select='auto',
-                session_id='0', history=[], function_modules=[],
+                session_id='admin', history=[], function_modules=[],
                 sysText=None, reqText=None, inpText='こんにちは', 
                 filePath=[],
-                temperature=0.8, maxStep=10, inpLang='ja-JP', outLang='ja-JP', ):
+                temperature=0.8, max_step=10, inpLang='ja-JP', outLang='ja-JP', ):
 
         # 戻り値
         res_text        = ''
@@ -2659,22 +2482,54 @@ Respond according to the following criteria:
             self.print(session_id, 'ChatGPT: Not Authenticate Error !')
             return res_text, res_path, nick_name, model_name, res_history
 
-        # 実行モデル判定
+        # ファイル分離
         upload_files    = []
         image_urls      = []
         try:
-            chat_class, model_select, nick_name, model_name, upload_files, image_urls = \
-                self.model_check(chat_class=chat_class, model_select=model_select, 
-                                session_id='internal', history=[], function_modules=[], 
-                                sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath, )
+            upload_files, image_urls = self.files_check(filePath=filePath, )
         except Exception as e:
             print(e)
 
+        # チャットクラス 指定
+        if (chat_class == 'auto'):
+            if (inpText.strip()[:len(self.gpt_a_nick_name)+1].lower() == (self.gpt_a_nick_name.lower() + ',')):
+                if (self.gpt_a_enable == True):
+                        chat_class = 'chat'
+            elif (inpText.strip()[:len(self.gpt_b_nick_name)+1].lower() == (self.gpt_b_nick_name.lower() + ',')):
+                if (self.gpt_b_enable == True):
+                        chat_class = 'chat'
+            elif (inpText.strip()[:len(self.gpt_v_nick_name)+1].lower() == (self.gpt_v_nick_name.lower() + ',')):
+                if (self.gpt_v_enable == True):
+                    if  (len(image_urls) > 0) \
+                    and (len(image_urls) == len(upload_files)):
+                        chat_class = 'vision'
+            elif (inpText.strip()[:len(self.gpt_x_nick_name)+1].lower() == (self.gpt_x_nick_name.lower() + ',')):
+                if (self.gpt_x_enable == True):
+                        chat_class = 'assistant'
+            elif (inpText.strip()[:5].lower() == ('riki,')):
+                if (self.gpt_x_enable == True):
+                        chat_class = 'assistant'
+            elif (inpText.strip()[:7].lower() == ('vision,')):
+                if (self.gpt_v_enable == True):
+                    if  (len(image_urls) > 0) \
+                    and (len(image_urls) == len(upload_files)):
+                        chat_class = 'vision'
+            elif (inpText.strip()[:10].lower() == ('assistant,')):
+                if (self.gpt_x_enable == True):
+                        chat_class = 'assistant'
+            elif (inpText.strip()[:7].lower() == ('openai,')):
+                if (self.gpt_b_enable == True):
+                        chat_class = 'chat'
+
         # ChatGPT
-        if (model_select == 'auto') \
-        or (model_select == 'a') \
-        or (model_select == 'b') \
-        or (model_select == 'v'):
+        if   (chat_class == 'auto') \
+        or   (chat_class == 'openai') \
+        or   (chat_class == 'chat') \
+        or   (chat_class == 'vision') \
+        or  ((chat_class != 'knowledge') \
+        and  (chat_class != 'code_interpreter') \
+        and  (chat_class != 'assistant') \
+        and  (model_select != 'x')):
             #try:
                 res_text, res_path, res_files, nick_name, model_name, res_history = \
                     self.run_gpt(chat_class=chat_class, model_select=model_select,
@@ -2682,12 +2537,12 @@ Respond according to the following criteria:
                                  session_id=session_id, history=res_history, function_modules=function_modules,
                                  sysText=sysText, reqText=reqText, inpText=inpText,
                                  upload_files=upload_files, image_urls=image_urls,
-                                 temperature=temperature, maxStep=maxStep, )
+                                 temperature=temperature, max_step=max_step, )
             #except Exception as e:
             #    print(e)
 
         # Assistant
-        elif (model_select == 'x'):
+        else:
             #try:
                 res_text, res_path, res_files, nick_name, model_name, res_history = \
                     self.auto_assistant(chat_class=chat_class, model_select=model_select,
@@ -2695,11 +2550,9 @@ Respond according to the following criteria:
                                         session_id=session_id, history=res_history, function_modules=function_modules,
                                         sysText=sysText, reqText=reqText, inpText=inpText,
                                         upload_files=upload_files, image_urls=image_urls,
-                                        temperature=temperature, maxStep=maxStep, )
+                                        temperature=temperature, max_step=max_step, )
             #except Exception as e:
             #    print(e)
-        else:
-            self.print(session_id, f" ChatGPT : Model select error! { api_type }, { model_select }")
 
         # 文書成形
         if (res_text != ''):
@@ -2803,9 +2656,9 @@ if __name__ == '__main__':
                 import    speech_bot_function
                 botFunc = speech_bot_function.botFunction()
 
-                #res, msg = openaiAPI.functions_load(functions_path='_extensions/openai_gpt/', secure_level='medium', )
+                #res, msg = openaiAPI.functions_load(functions_path='_extensions/function/', secure_level='medium', )
                 res, msg = botFunc.functions_load(
-                    functions_path='_extensions/openai_gpt/', secure_level='low', )
+                    functions_path='_extensions/function/', secure_level='low', )
                 if (res != True) or (msg != ''):
                     print(msg)
                     print()
@@ -2817,7 +2670,42 @@ if __name__ == '__main__':
             if False:
                 sysText = None
                 reqText = ''
-                #inpText = 'おはようございます。'
+                inpText = 'おはようございます。'
+                filePath = []
+                print('[Request]')
+                print(reqText, inpText )
+                print()
+                res_text, res_path, res_files, res_name, res_api, openaiAPI.history = \
+                    openaiAPI.chatBot(  chat_class='chat', model_select='auto', 
+                                        session_id='guest1', history=openaiAPI.history, function_modules=function_modules,
+                                        sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
+                                        inpLang='ja', outLang='ja', )
+                print()
+                print('[' + res_name + '] (' + res_api + ')' )
+                print('', res_text)
+                print()
+
+            if False:
+                sysText = None
+                reqText = ''
+                inpText = '今日は何月何日？'
+                filePath = []
+                print('[Request]')
+                print(reqText, inpText )
+                print()
+                res_text, res_path, res_files, res_name, res_api, openaiAPI.history = \
+                    openaiAPI.chatBot(  chat_class='chat', model_select='auto', 
+                                        session_id='admin', history=openaiAPI.history, function_modules=function_modules,
+                                        sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
+                                        inpLang='ja', outLang='ja', )
+                print()
+                print('[' + res_name + '] (' + res_api + ')' )
+                print('', res_text)
+                print()
+
+            if False:
+                sysText = None
+                reqText = ''
                 inpText = 'この画像はなんだと思いますか？'
                 filePath = ['_icons/dog.jpg', '_icons/kyoto.png']
                 print()
@@ -2826,7 +2714,7 @@ if __name__ == '__main__':
                 print()
                 res_text, res_path, res_files, res_name, res_api, openaiAPI.history = \
                     openaiAPI.chatBot(  chat_class='vision', model_select='auto', 
-                                        session_id='0', history=openaiAPI.history, function_modules=function_modules,
+                                        session_id='admin', history=openaiAPI.history, function_modules=function_modules,
                                         sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
                                         inpLang='ja', outLang='ja', )
                 print()
@@ -2834,23 +2722,36 @@ if __name__ == '__main__':
                 print('', res_text)
                 print()
 
-            if False:
+            if True:
                 sysText = None
                 reqText = ''
-                #reqText = '以下の質問には、コテコテの大阪弁で回答してください。'
-                inpText = 'おはようございます。'
-                #inpText = '日本で有名な観光地を詳しく教えてください。'
-                #inpText = '今日は何月何日？'
-                #inpText = '私のニックネームは「こんさん」です。覚えましたか？'
-                #inpText = '連絡先のかんべさんと連絡先のみきちゃんの電話番号？'
-                #inpText = 'かわいい猫の画像生成してください。'
+                inpText = 'riki,おはようございます。'
+                filePath = []
+                print()
+                print('[Request]')
+                print(reqText, inpText )
+                print()
+                res_text, res_path, res_files, res_name, res_api, openaiAPI.history = \
+                    openaiAPI.chatBot(  chat_class='auto', model_select='auto', 
+                                        session_id='guest1', history=openaiAPI.history, function_modules=function_modules,
+                                        sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
+                                        inpLang='ja', outLang='ja', )
+                print()
+                print('[' + res_name + '] (' + res_api + ')' )
+                print('', res_text)
+                print()
+
+            if True:
+                sysText = None
+                reqText = ''
+                inpText = 'riki,今日は何月何日？'
                 filePath = []
                 print('[Request]')
                 print(reqText, inpText )
                 print()
                 res_text, res_path, res_files, res_name, res_api, openaiAPI.history = \
-                    openaiAPI.chatBot(  chat_class='chat', model_select='auto', 
-                                        session_id='0', history=openaiAPI.history, function_modules=function_modules,
+                    openaiAPI.chatBot(  chat_class='auto', model_select='auto', 
+                                        session_id='admin', history=openaiAPI.history, function_modules=function_modules,
                                         sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
                                         inpLang='ja', outLang='ja', )
                 print()
@@ -2861,12 +2762,31 @@ if __name__ == '__main__':
             if False:
                 sysText = None
                 reqText = ''
-                inpText = 'riki,おはようございます。'
+                inpText = 'riki,この画像はなんだと思いますか？'
+                filePath = ['_icons/dog.jpg', '_icons/kyoto.png']
+                print()
+                print('[Request]')
+                print(reqText, inpText )
+                print()
+                res_text, res_path, res_files, res_name, res_api, openaiAPI.history = \
+                    openaiAPI.chatBot(  chat_class='auto', model_select='auto', 
+                                        session_id='admin', history=openaiAPI.history, function_modules=function_modules,
+                                        sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
+                                        inpLang='ja', outLang='ja', )
+                print()
+                print('[' + res_name + '] (' + res_api + ')' )
+                print('', res_text)
+                print()
+
+            if False:
+                sysText = None
+                reqText = ''
+                #inpText = 'riki,おはようございます。'
                 #inpText = '計算式 123 * 456 * (7 + 8) の答え？'
                 #inpText = 'riki,東京の天気？'
                 #inpText = 'gpt4,日本の主要３都市の天気？'
                 #inpText = 'riki,日本の主要３都市の天気？'
-                #inpText = 'riki,今日は何月何日？'
+                inpText = 'riki,今日は何月何日？'
                 #inpText = 'riki,私のニックネームを覚えていますか？'
                 #inpText = 'riki,小説でマインは何階に住んでいますか？'
                 #inpText = 'riki,かわいい猫の画像生成して、その画像を言葉で説明して'
@@ -2884,33 +2804,7 @@ if __name__ == '__main__':
                 print()
                 res_text, res_path, res_files, res_name, res_api, openaiAPI.history = \
                     openaiAPI.chatBot(  chat_class='auto', model_select='auto', 
-                                        session_id='0', history=openaiAPI.history, function_modules=function_modules,
-                                        sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
-                                        inpLang='ja', outLang='ja', )
-                print()
-                print('[' + res_name + '] (' + res_api + ')' )
-                print('', res_text)
-                print()
-
-            if False:
-                print('[History]')
-                for h in range(len(openaiAPI.history)):
-                    print(openaiAPI.history[h])
-                openaiAPI.history = []
-
-            if True:
-                sysText = None
-                reqText = ''
-                inpText = 'おはようございます。'
-                #inpText = '今日は何日？'
-                #inpText = '日本の主要３都市の天気？'
-                filePath = []
-                print('[Request]')
-                print(reqText, inpText )
-                print()
-                res_text, res_path, res_files, res_name, res_api, openaiAPI.history = \
-                    openaiAPI.chatBot(  chat_class='chat', model_select='auto', 
-                                        session_id='0', history=openaiAPI.history, function_modules=function_modules,
+                                        session_id='admin', history=openaiAPI.history, function_modules=function_modules,
                                         sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
                                         inpLang='ja', outLang='ja', )
                 print()
