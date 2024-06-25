@@ -694,7 +694,7 @@ class qCV2_class:
             try:
                 label  = self.yolov8_labels[id]
                 label2 = label + '({:4.1f}%)'.format(score*100)
-                color  = [ int(c) for c in self.ssd_colors[id] ]
+                color  = [ int(c) for c in self.yolov8_colors[id] ]
             except:
                 label  = str(id)
                 label2 = label + '({:4.1f}%)'.format(score*100)

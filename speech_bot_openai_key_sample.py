@@ -68,10 +68,10 @@ def getkey(api, key):
 
         if (key == 'gpt_v_nick_name'):
             return 'your gpt (v) nick name'
-        if (key == 'gpt_v_model1'):
-            return 'your gpt (v) model1'
-        if (key == 'gpt_v_token1'):
-            return 'your gpt (v) token1'
+        if (key == 'gpt_v_model'):
+            return 'your gpt (v) model'
+        if (key == 'gpt_v_token'):
+            return 'your gpt (v) token'
 
         if (key == 'gpt_x_nick_name'):
             return 'your gpt (x) nick name'
@@ -126,10 +126,10 @@ def getkey(api, key):
 
         if (key == 'azure_v_nick_name'):
             return 'your azure (v) nick name'
-        if (key == 'azure_v_model1'):
-            return 'your azure (v) model1'
-        if (key == 'azure_v_token1'):
-            return 'your azure (v) token1'
+        if (key == 'azure_v_model'):
+            return 'your azure (v) model'
+        if (key == 'azure_v_token'):
+            return 'your azure (v) token'
 
         if (key == 'azure_x_nick_name'):
             return 'your azure (x) nick name'

@@ -20,7 +20,6 @@ import base64
 import json
 
 import queue
-from PIL import ImageGrab, Image
 
 import google.generativeai as genai
 #import google.ai.generativelanguage as glm
@@ -67,6 +66,16 @@ class _geminiAPI:
         self.gemini_b_model         = None
         self.gemini_b_token         = 0
 
+        self.gemini_v_enable        = False
+        self.gemini_v_nick_name     = ''
+        self.gemini_v_model         = None
+        self.gemini_v_token         = 0
+
+        self.gemini_x_enable        = False
+        self.gemini_x_nick_name     = ''
+        self.gemini_x_model         = None
+        self.gemini_x_token         = 0
+
         self.history                = []
 
         self.seq                    = 0
@@ -106,6 +115,8 @@ class _geminiAPI:
 
                      gemini_a_nick_name, gemini_a_model, gemini_a_token, 
                      gemini_b_nick_name, gemini_b_model, gemini_b_token, 
+                     gemini_v_nick_name, gemini_v_model, gemini_v_token, 
+                     gemini_x_nick_name, gemini_x_model, gemini_x_token, 
                     ):
 
         # 設定
@@ -135,6 +146,18 @@ class _geminiAPI:
             self.gemini_b_model      = gemini_b_model
             self.gemini_b_token      = int(gemini_b_token)
 
+        if (gemini_v_nick_name != ''):
+            self.gemini_v_enable     = False
+            self.gemini_v_nick_name  = gemini_v_nick_name
+            self.gemini_v_model      = gemini_v_model
+            self.gemini_v_token      = int(gemini_v_token)
+
+        if (gemini_x_nick_name != ''):
+            self.gemini_x_enable     = False
+            self.gemini_x_nick_name  = gemini_x_nick_name
+            self.gemini_x_model      = gemini_x_model
+            self.gemini_x_token      = int(gemini_x_token)
+
         # API-KEYの設定
         try:
             genai.configure(api_key=gemini_key_id, ) 
@@ -149,12 +172,20 @@ class _geminiAPI:
                 if 'generateContent' in m.supported_generation_methods:
                     model = m.name.replace('models/', '')
                     if (model == self.gemini_a_model):
-                        print(model)
+                        #print(model)
                         self.gemini_a_enable = True
                         hit = True
                     if (model == self.gemini_b_model):
-                        print(model)
+                        #print(model)
                         self.gemini_b_enable = True
+                        hit = True
+                    if (model == self.gemini_v_model):
+                        #print(model)
+                        self.gemini_v_enable = True
+                        hit = True
+                    if (model == self.gemini_x_model):
+                        #print(model)
+                        self.gemini_x_enable = True
                         hit = True
         except Exception as e:
             print(e)
@@ -168,12 +199,46 @@ class _geminiAPI:
     def setTimeOut(self, timeOut=60, ):
         self.timeOut = timeOut
 
+    def text_replace(self, text='', ):
+        if (text.strip() == ''):
+            return ''
+
+        text = text.replace('\r', '')
+
+        text = text.replace('。', '。\n')
+        text = text.replace('?', '?\n')
+        text = text.replace('？', '?\n')
+        text = text.replace('!', '!\n')
+        text = text.replace('！', '!\n')
+        text = text.replace('。\n」','。」')
+        text = text.replace('。\n"' ,'。"')
+        text = text.replace("。\n'" ,"。'")
+        text = text.replace('?\n」','?」')
+        text = text.replace('?\n"' ,'?"')
+        text = text.replace("?\n'" ,"?'")
+        text = text.replace('!\n」','!」')
+        text = text.replace('!\n"' ,'!"')
+        text = text.replace("!\n'" ,"!'")
+
+        text = text.replace('\n \n ' ,'\n')
+        text = text.replace('\n \n' ,'\n')
+
+        hit = True
+        while (hit == True):
+            if (text.find('\n\n')>0):
+                hit = True
+                text = text.replace('\n\n', '\n')
+            else:
+                hit = False
+
+        return text.strip()
+
     def history_add(self, history=[], sysText=None, reqText=None, inpText='こんにちは', ):
         res_history = history
 
         # sysText, reqText, inpText -> history
         if (sysText is None):
-            sysText = 'あなたは教師のように話す賢いアシスタントです。'
+            sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
         if (sysText.strip() != ''):
             if (len(res_history) > 0):
                 if (sysText.strip() != res_history[0]['content'].strip()):
@@ -260,6 +325,9 @@ class _geminiAPI:
                 upload_files=[], image_urls=[], 
                 temperature=0.8, max_step=10, jsonMode=False, ):
 
+        if (sysText is None):
+            sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
+
         # 戻り値
         res_text        = ''
         res_path        = ''
@@ -272,16 +340,105 @@ class _geminiAPI:
             self.print(session_id, ' Gemini  : Not Authenticate Error !')
             return res_text, res_path, res_name, res_api, res_history
 
-        # tools
-        tools = []
-        for module_dic in function_modules:
-            func_dic = module_dic['function']
-            func_str = json.dumps(func_dic, ensure_ascii=False, )
-            func_str = func_str.replace('"type"', '"type_"')
-            func_str = func_str.replace('"object"', '"OBJECT"')
-            func_str = func_str.replace('"string"', '"STRING"')
-            func     = json.loads(func_str)
-            tools.append(func)
+        # チャットクラス確認
+        res_name = self.gemini_a_nick_name
+        res_api  = self.gemini_a_model
+        if  (chat_class == 'gemini'):
+            if (self.gemini_b_enable == True):
+                res_name = self.gemini_b_nick_name
+                res_api  = self.gemini_b_model
+        if  (chat_class == 'knowledge') \
+        or  (chat_class == 'code_interpreter') \
+        or  (chat_class == 'assistant') \
+        or  (model_select == 'x'):
+            if (self.gemini_x_enable == True):
+                res_name = self.gemini_x_nick_name
+                res_api  = self.gemini_x_model
+
+        # model 指定
+        if (self.gemini_a_nick_name != ''):
+            if (inpText.strip()[:len(self.gemini_a_nick_name)+1].lower() == (self.gemini_a_nick_name.lower() + ',')):
+                inpText = inpText.strip()[len(self.gemini_a_nick_name)+1:]
+        if (self.gemini_b_nick_name != ''):
+            if (inpText.strip()[:len(self.gemini_b_nick_name)+1].lower() == (self.gemini_b_nick_name.lower() + ',')):
+                inpText = inpText.strip()[len(self.gemini_b_nick_name)+1:]
+                if   (self.gemini_b_enable == True):
+                        res_name = self.gemini_b_nick_name
+                        res_api  = self.gemini_b_model
+        if (self.gemini_v_nick_name != ''):
+            if (inpText.strip()[:len(self.gemini_v_nick_name)+1].lower() == (self.gemini_v_nick_name.lower() + ',')):
+                inpText = inpText.strip()[len(self.gemini_v_nick_name)+1:]
+                if   (self.gemini_v_enable == True):
+                    if  (len(image_urls) > 0) \
+                    and (len(image_urls) == len(upload_files)):
+                        res_name = self.gemini_v_nick_name
+                        res_api  = self.gemini_v_model
+                elif (self.gemini_x_enable == True):
+                        res_name = self.gemini_x_nick_name
+                        res_api  = self.gemini_x_model
+        if (self.gemini_x_nick_name != ''):
+            if (inpText.strip()[:len(self.gemini_x_nick_name)+1].lower() == (self.gemini_x_nick_name.lower() + ',')):
+                inpText = inpText.strip()[len(self.gemini_x_nick_name)+1:]
+                if   (self.gemini_x_enable == True):
+                        res_name = self.gemini_x_nick_name
+                        res_api  = self.gemini_x_model
+                elif (self.gemini_b_enable == True):
+                        res_name = self.gemini_b_nick_name
+                        res_api  = self.gemini_b_model
+        if   (inpText.strip()[:5].lower() == ('riki,')):
+            inpText = inpText.strip()[5:]
+            if   (self.gemini_x_enable == True):
+                        res_name = self.gemini_x_nick_name
+                        res_api  = self.gemini_x_model
+            elif (self.gemini_b_enable == True):
+                        res_name = self.gemini_b_nick_name
+                        res_api  = self.gemini_b_model
+        elif (inpText.strip()[:7].lower() == ('vision,')):
+            inpText = inpText.strip()[7:]
+            if   (self.gemini_v_enable == True):
+                if  (len(image_urls) > 0) \
+                and (len(image_urls) == len(upload_files)):
+                        res_name = self.gemini_v_nick_name
+                        res_api  = self.gemini_v_model
+            elif (self.gemini_x_enable == True):
+                        res_name = self.gemini_x_nick_name
+                        res_api  = self.gemini_x_model
+        elif (inpText.strip()[:10].lower() == ('assistant,')):
+            inpText = inpText.strip()[10:]
+            if (self.gemini_x_enable == True):
+                        res_name = self.gemini_x_nick_name
+                        res_api  = self.gemini_x_model
+            elif (self.gemini_b_enable == True):
+                        res_name = self.gemini_b_nick_name
+                        res_api  = self.gemini_b_model
+        elif (inpText.strip()[:7].lower() == ('openai,')):
+            inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:7].lower() == ('claude,')):
+            inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:7].lower() == ('gemini,')):
+            inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:6].lower() == ('local,')):
+            inpText = inpText.strip()[6:]
+
+        # モデル
+        if (res_api is None):
+            res_name = self.gemini_a_nick_name
+            res_api  = self.gemini_a_model
+            if (self.gemini_b_enable == True):
+                if (len(upload_files) > 0) \
+                or (len(inpText) > 1000):
+                    res_name = self.gemini_b_nick_name
+                    res_api  = self.gemini_b_model
+
+        # モデル補正
+        if  (len(image_urls) > 0) \
+        and (len(image_urls) == len(upload_files)):
+            if   (self.gemini_v_enable == True):
+                res_name = self.gemini_v_nick_name
+                res_api  = self.gemini_v_model
+            elif (self.gemini_x_enable == True):
+                res_name = self.gemini_x_nick_name
+                res_api  = self.gemini_x_model
 
         # history 追加・圧縮 (古いメッセージ)
         res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )
@@ -289,12 +446,12 @@ class _geminiAPI:
 
         # 過去メッセージ追加
         msg_text = ''
-        if (len(res_history) > 1):
+        if (len(res_history) > 2):
             msg_text += "''' これは過去の会話履歴です。\n"
-            for m in range(len(res_history) - 1):
-                role    = res_history[m].get('role','')
-                content = res_history[m].get('content','')
-                name    = res_history[m].get('name','')
+            for m in range(len(res_history) - 2):
+                role    = res_history[m+1].get('role','')
+                content = res_history[m+1].get('content','')
+                name    = res_history[m+1].get('name','')
                 if (role != 'system'):
                     # 全てユーザーメッセージにて処理
                     if (name is None) or (name == ''):
@@ -306,89 +463,6 @@ class _geminiAPI:
                             msg_text += '(function ' + name + ' result) ' + '\n' + content + '\n'
             msg_text += "''' 会話履歴はここまでです。\n"
             msg_text += "\n"
-
-        # 送信データ
-        if (len(res_history) <= 1):
-            if (reqText is not None) and (reqText != ''):
-                msg_text += reqText + '\n'
-        msg_text += inpText
-
-        request = []
-        request.append(msg_text)
-
-        # チャットクラス確認
-        res_name = self.gemini_a_nick_name
-        res_api  = self.gemini_a_model
-        if  (chat_class == 'knowledge') \
-        or  (chat_class == 'code_interpreter') \
-        or  (chat_class == 'assistant') \
-        or  (chat_class == 'gemini') \
-        or  (model_select == 'x'):
-            if (self.gemini_b_enable == True):
-                res_name = self.gemini_b_nick_name
-                res_api  = self.gemini_b_model
-
-        # model 指定
-        if (inpText.strip()[:len(self.gemini_a_nick_name)+1].lower() == (self.gemini_a_nick_name.lower() + ',')):
-            inpText = inpText.strip()[len(self.gemini_a_nick_name)+1:]
-        elif (inpText.strip()[:len(self.gemini_b_nick_name)+1].lower() == (self.gemini_b_nick_name.lower() + ',')):
-            inpText = inpText.strip()[len(self.gemini_b_nick_name)+1:]
-            if (self.gemini_b_enable == True):
-                    res_name = self.gemini_b_nick_name
-                    res_api  = self.gemini_b_model
-        elif (inpText.strip()[:5].lower() == ('riki,')):
-            inpText = inpText.strip()[5:]
-            if (self.gemini_b_enable == True):
-                    res_name = self.gemini_b_nick_name
-                    res_api  = self.gemini_b_model
-        elif (inpText.strip()[:7].lower() == ('vision,')):
-            inpText = inpText.strip()[7:]
-            if (self.gemini_b_enable == True):
-                if  (len(image_urls) > 0) \
-                and (len(image_urls) == len(upload_files)):
-                    res_name = self.gemini_b_nick_name
-                    res_api  = self.gemini_b_model
-        elif (inpText.strip()[:10].lower() == ('assistant,')):
-            inpText = inpText.strip()[10:]
-            if (self.gemini_b_enable == True):
-                    res_name = self.gemini_b_nick_name
-                    res_api  = self.gemini_b_model
-        elif (inpText.strip()[:7].lower() == ('gemini,')):
-            inpText = inpText.strip()[7:]
-            if (self.gemini_b_enable == True):
-                    res_name = self.gemini_b_nick_name
-                    res_api  = self.gemini_b_model
-        elif (inpText.strip()[:7].lower() == ('google,')):
-            inpText = inpText.strip()[7:]
-        elif (inpText.strip()[:7].lower() == ('openai,')):
-            inpText = inpText.strip()[7:]
-
-        # モデル
-        if (res_api is None):
-            res_name = self.gemini_a_nick_name
-            res_api  = self.gemini_a_model
-            if (self.gemini_b_enable == True):
-                if (len(upload_files) >= 0) \
-                or (len(inpText) > 1000):
-                    res_name = self.gemini_b_nick_name
-                    res_api  = self.gemini_b_model
-
-        # gemini
-        if (jsonMode != True):
-            gemini = genai.GenerativeModel(
-                            model_name=res_api,
-                            system_instruction=sysText, tools=tools, )
-        else:
-            gemini = genai.GenerativeModel( 
-                            model_name=res_api,
-                            system_instruction=sysText, tools=tools,
-                            generation_config={"response_mime_type": "application/json"}, )
-
-        # # ファイル削除
-        # files = genai.list_files()
-        # for f in files:
-        #    self.print(session_id, f" Gemini  : Delete file { f.name }.")
-        #    genai.delete_file(f.name)
 
         # ファイル添付
         for file_name in upload_files:
@@ -428,6 +502,58 @@ class _geminiAPI:
                         self.print(session_id, ' Gemini  : Upload complete.')
                         request.append(upload_obj)
 
+        # tools
+        tools = []
+        for module_dic in function_modules:
+            func_dic = module_dic['function']
+            func_str = json.dumps(func_dic, ensure_ascii=False, )
+            func_str = func_str.replace('"type"', '"type_"')
+            func_str = func_str.replace('"object"', '"OBJECT"')
+            func_str = func_str.replace('"string"', '"STRING"')
+            func     = json.loads(func_str)
+            tools.append(func)
+
+        # gemini 設定
+        if (jsonMode != True):
+            generation_config_normal = {
+                "temperature": temperature,
+                "top_p": 0.95,
+                "top_k": 64,
+                "max_output_tokens": 8192,
+                "response_mime_type": "text/plain",
+            }
+            gemini = genai.GenerativeModel(
+                            model_name=res_api,
+                            generation_config=generation_config_normal,
+                            system_instruction=sysText, tools=tools, )
+        else:
+            generation_config_json = {
+                "temperature": temperature,
+                "top_p": 0.95,
+                "top_k": 64,
+                "max_output_tokens": 8192,
+                "response_mime_type": "application/json",
+            }
+            gemini = genai.GenerativeModel( 
+                            model_name=res_api,
+                            generation_config=generation_config_json,
+                            system_instruction=sysText, tools=tools, )
+
+        # # ファイル削除
+        # files = genai.list_files()
+        # for f in files:
+        #    self.print(session_id, f" Gemini  : Delete file { f.name }.")
+        #    genai.delete_file(f.name)
+
+        # 送信データ
+        if (len(res_history) <= 2):
+            if (reqText is not None) and (reqText != ''):
+                msg_text += reqText + '\n'
+        msg_text += inpText
+
+        request = []
+        request.append(msg_text)
+
         # gemini
         #chat = gemini.start_chat(history=history, )
         chat = gemini.start_chat(history=[], )
@@ -457,15 +583,17 @@ class _geminiAPI:
                 # 結果
                 content       = {"role": "user", "parts": request }
                 response      = chat.send_message(content=content, stream=stream, )
-                content_text  = None
-                content_parts = None
 
                 # Stream 表示
                 if (stream == True):
+
                     chkTime     = time.time()
                     for chunk in response:
                         if ((time.time() - chkTime) > self.timeOut):
                             break
+
+                        content_text  = None
+                        content_parts = None
 
                         content_text = chunk.candidates[0].content.parts[0].text
                         if (content_text is not None) and (content_text != ''):
@@ -498,6 +626,9 @@ class _geminiAPI:
 
                 # response 結果
                 if (stream == False):
+                        content_text  = None
+                        content_parts = None
+
                         content_text = response.candidates[0].content.parts[0].text
                         if (content_text is not None) and (content_text != ''):
                             res_role    = 'assistant'
@@ -608,16 +739,22 @@ class _geminiAPI:
                     function_name   = 'exit'
                     self.print(session_id, f" Gemini  : { res_name.lower() } complite.")
 
+            # 正常回答
             if (res_content is not None):
                 #self.print(session_id, res_content.rstrip())
-                res_text += res_content.rstrip() + '\n'
+                res_text += res_content.rstrip()
 
-            #res_history = chat.history
+            # 異常回答
+            else:
+                self.print(session_id, ' Gemini  : Error !')
 
             # History 追加格納
-            self.seq += 1
-            dic = {'seq': self.seq, 'time': time.time(), 'role': 'assistant', 'name': '', 'content': res_text }
-            res_history.append(dic)
+            if (res_text.strip() != ''):
+                #res_history = chat.history
+
+                self.seq += 1
+                dic = {'seq': self.seq, 'time': time.time(), 'role': 'assistant', 'name': '', 'content': res_text }
+                res_history.append(dic)
 
             # # ファイル削除
             # files = genai.list_files()
@@ -673,36 +810,9 @@ class _geminiAPI:
                         temperature=temperature, max_step=max_step, )
 
         # 文書成形
-        if (res_text != ''):
-            text = res_text
-            text = text.replace('\r', '')
-
-            text = text.replace('。', '。\n')
-            text = text.replace('？', '？\n')
-            text = text.replace('！', '！\n')
-            text = text.replace('。\n」','。」')
-            text = text.replace('。\n"' ,'。"')
-            text = text.replace("。\n'" ,"。'")
-            text = text.replace('？\n」','？」')
-            text = text.replace('？\n"' ,'？"')
-            text = text.replace("？\n'" ,"？'")
-            text = text.replace('！\n」','！」')
-            text = text.replace('！\n"' ,'！"')
-            text = text.replace("！\n'" ,"！'")
-
-            text = text.replace('\n \n ' ,'\n')
-            text = text.replace('\n \n' ,'\n')
-
-            hit = True
-            while (hit == True):
-                if (text.find('\n\n')>0):
-                    hit = True
-                    text = text.replace('\n\n', '\n')
-                else:
-                    hit = False
-            text = text.strip()
-
-            res_text    = text
+        text = self.text_replace(text=res_text, )
+        if (text.strip() != ''):
+            res_text = text
         else:
             res_text = '!'
 
@@ -721,7 +831,7 @@ if __name__ == '__main__':
         log_queue = queue.Queue()
         res = geminiAPI.init(log_queue=log_queue, )
 
-        res = geminiAPI.authenticate('google',
+        res = geminiAPI.authenticate('gemini',
                             api_type,
                             gemini_key.getkey('gemini','gemini_default_gpt'), gemini_key.getkey('gemini','gemini_default_class'),
                             gemini_key.getkey('gemini','gemini_auto_continue'),
@@ -729,6 +839,8 @@ if __name__ == '__main__':
                             gemini_key.getkey('gemini','gemini_key_id'),
                             gemini_key.getkey('gemini','gemini_a_nick_name'), gemini_key.getkey('gemini','gemini_a_model'), gemini_key.getkey('gemini','gemini_a_token'),
                             gemini_key.getkey('gemini','gemini_b_nick_name'), gemini_key.getkey('gemini','gemini_b_model'), gemini_key.getkey('gemini','gemini_b_token'),
+                            gemini_key.getkey('gemini','gemini_v_nick_name'), gemini_key.getkey('gemini','gemini_v_model'), gemini_key.getkey('gemini','gemini_v_token'),
+                            gemini_key.getkey('gemini','gemini_x_nick_name'), gemini_key.getkey('gemini','gemini_x_model'), gemini_key.getkey('gemini','gemini_x_token'),
                             )
         print('authenticate:', res, )
         if (res == True):
@@ -740,7 +852,6 @@ if __name__ == '__main__':
                 import    speech_bot_function
                 botFunc = speech_bot_function.botFunction()
 
-                #res, msg = openaiAPI.functions_load(functions_path='_extensions/function/', secure_level='medium', )
                 res, msg = botFunc.functions_load(
                     functions_path='_extensions/function/', secure_level='low', )
                 if (res != True) or (msg != ''):
@@ -751,7 +862,7 @@ if __name__ == '__main__':
                     if (module_dic['onoff'] == 'on'):
                         function_modules.append(module_dic)
 
-            if False:
+            if True:
                 sysText = None
                 reqText = ''
                 inpText = 'おはようございます。'
@@ -769,7 +880,7 @@ if __name__ == '__main__':
                 print(str(res_text))
                 print()
 
-            if True:
+            if False:
                 sysText = None
                 reqText = ''
                 inpText = '兵庫県三木市の天気？'
@@ -824,7 +935,7 @@ if __name__ == '__main__':
                 print(str(res_text))
                 print()
 
-            if True:
+            if False:
                 print('[History]')
                 for h in range(len(geminiAPI.history)):
                     print(geminiAPI.history[h])

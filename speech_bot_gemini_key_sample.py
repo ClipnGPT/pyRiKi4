@@ -45,6 +45,20 @@ def getkey(api, key):
         if (key == 'gemini_b_token'):
             return 'your gemini (b) token'
 
+        if (key == 'gemini_v_nick_name'):
+            return 'your gemini (v) nick name'
+        if (key == 'gemini_v_model'):
+            return 'your gemini (v) model'
+        if (key == 'gemini_v_token'):
+            return 'your gemini (v) token'
+
+        if (key == 'gemini_x_nick_name'):
+            return 'your gemini (x) nick name'
+        if (key == 'gemini_x_model'):
+            return 'your gemini (x) model'
+        if (key == 'gemini_x_token'):
+            return 'your gemini (x) token'
+
     return False
 
 

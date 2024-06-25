@@ -37,7 +37,8 @@ ECHO -------
     python -m pip  install --upgrade rainbow-logging-handler
     python -m pip  install --upgrade pycryptodome
 
-    python -m pip  install --upgrade numpy
+rem python -m pip  install --upgrade numpy
+    python -m pip  install --upgrade numpy==1.26.4
 rem python -m pip  install --upgrade opencv-python
 rem python -m pip  install --upgrade opencv-contrib-python
     python -m pip  install --upgrade opencv-python==4.9.0.80

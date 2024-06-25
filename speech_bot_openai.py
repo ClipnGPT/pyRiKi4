@@ -417,8 +417,8 @@ class ChatBotAPI:
 
         self.gpt_v_enable           = False
         self.gpt_v_nick_name        = ''
-        self.gpt_v_model1           = None
-        self.gpt_v_token1           = 0
+        self.gpt_v_model            = None
+        self.gpt_v_token            = 0
 
         self.gpt_x_enable           = False
         self.gpt_x_nick_name        = ''
@@ -475,7 +475,7 @@ class ChatBotAPI:
                      gpt_b_model3, gpt_b_token3,
                      gpt_b_length,
                      gpt_v_nick_name, 
-                     gpt_v_model1, gpt_v_token1, 
+                     gpt_v_model, gpt_v_token, 
                      gpt_x_nick_name, 
                      gpt_x_model1, gpt_x_token1, 
                      gpt_x_model2, gpt_x_token2, 
@@ -535,8 +535,8 @@ class ChatBotAPI:
 
             self.gpt_v_enable       = False
             #self.gpt_v_nick_name    = gpt_v_nick_name
-            self.gpt_v_model1       = gpt_v_model1
-            self.gpt_v_token1       = int(gpt_v_token1)
+            self.gpt_v_model        = gpt_v_model
+            self.gpt_v_token        = int(gpt_v_token)
 
             self.gpt_x_enable       = False
             #self.gpt_x_nick_name    = gpt_x_nick_name
@@ -577,8 +577,8 @@ class ChatBotAPI:
                                 self.bot_auth        = True
                                 self.gpt_b_enable    = True
                                 self.gpt_b_nick_name = gpt_b_nick_name
-                        if (model.id == gpt_v_model1):
-                            if (self.gpt_v_token1 > 0):
+                        if (model.id == gpt_v_model):
+                            if (self.gpt_v_token > 0):
                                 self.bot_auth        = True
                                 self.gpt_v_enable    = True
                                 self.gpt_v_nick_name = gpt_v_nick_name
@@ -639,8 +639,8 @@ class ChatBotAPI:
                         self.gpt_b_enable       = True
                         self.gpt_b_nick_name    = gpt_b_nick_name
 
-                if (gpt_v_nick_name != '') and (gpt_v_model1 != ''):
-                    if (self.gpt_v_token1 > 0):
+                if (gpt_v_nick_name != '') and (gpt_v_model != ''):
+                    if (self.gpt_v_token > 0):
                         self.bot_auth           = True
                         self.gpt_v_enable       = True
                         self.gpt_v_nick_name    = gpt_v_nick_name
@@ -658,12 +658,46 @@ class ChatBotAPI:
     def setTimeOut(self, timeOut=60, ):
         self.timeOut = timeOut
 
+    def text_replace(self, text='', ):
+        if (text.strip() == ''):
+            return ''
+
+        text = text.replace('\r', '')
+
+        text = text.replace('。', '。\n')
+        text = text.replace('?', '?\n')
+        text = text.replace('？', '?\n')
+        text = text.replace('!', '!\n')
+        text = text.replace('！', '!\n')
+        text = text.replace('。\n」','。」')
+        text = text.replace('。\n"' ,'。"')
+        text = text.replace("。\n'" ,"。'")
+        text = text.replace('?\n」','?」')
+        text = text.replace('?\n"' ,'?"')
+        text = text.replace("?\n'" ,"?'")
+        text = text.replace('!\n」','!」')
+        text = text.replace('!\n"' ,'!"')
+        text = text.replace("!\n'" ,"!'")
+
+        text = text.replace('\n \n ' ,'\n')
+        text = text.replace('\n \n' ,'\n')
+
+        hit = True
+        while (hit == True):
+            if (text.find('\n\n')>0):
+                hit = True
+                text = text.replace('\n\n', '\n')
+            else:
+                hit = False
+
+        return text.strip()
+
     def history_add(self, history=[], sysText=None, reqText=None, inpText='こんにちは', ):
         res_history = history
 
         # sysText, reqText, inpText -> history
         if (sysText is None):
-            sysText = 'あなたは教師のように話す賢いアシスタントです。'
+            sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
         if (sysText.strip() != ''):
             if (len(res_history) > 0):
                 if (sysText.strip() != res_history[0]['content'].strip()):
@@ -768,8 +802,8 @@ class ChatBotAPI:
             if (self.gpt_v_enable == True):
                 select = 'v'
                 nick_name = self.gpt_v_nick_name
-                model     = self.gpt_v_model1
-                max       = self.gpt_v_token1
+                model     = self.gpt_v_model
+                max       = self.gpt_v_token
         if (model_select == 'x'):
             if (self.gpt_x_enable == True):
                 select = 'x'
@@ -940,41 +974,51 @@ class ChatBotAPI:
         # model 指定
         if (inpText.strip()[:len(self.gpt_a_nick_name)+1].lower() == (self.gpt_a_nick_name.lower() + ',')):
             inpText = inpText.strip()[len(self.gpt_a_nick_name)+1:]
-            if (self.gpt_a_enable == True):
+            if   (self.gpt_a_enable == True):
                     model_select = 'a'
         elif (inpText.strip()[:len(self.gpt_b_nick_name)+1].lower() == (self.gpt_b_nick_name.lower() + ',')):
             inpText = inpText.strip()[len(self.gpt_b_nick_name)+1:]
-            if (self.gpt_b_enable == True):
+            if   (self.gpt_b_enable == True):
                     model_select = 'b'
         elif (inpText.strip()[:len(self.gpt_v_nick_name)+1].lower() == (self.gpt_v_nick_name.lower() + ',')):
             inpText = inpText.strip()[len(self.gpt_v_nick_name)+1:]
-            if (self.gpt_v_enable == True):
+            if   (self.gpt_v_enable == True):
                 if  (len(image_urls) > 0) \
                 and (len(image_urls) == len(upload_files)):
                     model_select = 'v'
+            elif (self.gpt_x_enable == True):
+                    model_select = 'x'
         elif (inpText.strip()[:len(self.gpt_x_nick_name)+1].lower() == (self.gpt_x_nick_name.lower() + ',')):
             inpText = inpText.strip()[len(self.gpt_x_nick_name)+1:]
-            if (self.gpt_b_enable == True):
+            if   (self.gpt_x_enable == True):
+                    model_select = 'x'
+            elif (self.gpt_b_enable == True):
                     model_select = 'b'
         elif (inpText.strip()[:5].lower() == ('riki,')):
             inpText = inpText.strip()[5:]
-            if (self.gpt_b_enable == True):
+            if   (self.gpt_x_enable == True):
+                    model_select = 'x'
+            elif (self.gpt_b_enable == True):
                     model_select = 'b'
         elif (inpText.strip()[:7].lower() == ('vision,')):
             inpText = inpText.strip()[7:]
-            if (self.gpt_v_enable == True):
+            if   (self.gpt_v_enable == True):
                 if  (len(image_urls) > 0) \
                 and (len(image_urls) == len(upload_files)):
                     model_select = 'v'
+            elif (self.gpt_x_enable == True):
+                    model_select = 'x'
         elif (inpText.strip()[:10].lower() == ('assistant,')):
             inpText = inpText.strip()[10:]
-            if (self.gpt_b_enable == True):
+            if   (self.gpt_x_enable == True):
+                    model_select = 'x'
+            elif (self.gpt_b_enable == True):
                     model_select = 'b'
         elif (inpText.strip()[:7].lower() == ('openai,')):
             inpText = inpText.strip()[7:]
             if (self.gpt_b_enable == True):
                     model_select = 'b'
-        elif (inpText.strip()[:7].lower() == ('google,')):
+        elif (inpText.strip()[:7].lower() == ('claude,')):
             inpText = inpText.strip()[7:]
             if (self.gpt_b_enable == True):
                     model_select = 'b'
@@ -982,14 +1026,20 @@ class ChatBotAPI:
             inpText = inpText.strip()[7:]
             if (self.gpt_b_enable == True):
                     model_select = 'b'
+        elif (inpText.strip()[:7].lower() == ('local,')):
+            inpText = inpText.strip()[7:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'a'
 
         # Vision ?
         if (model_select == 'auto'):
             if (chat_class == 'auto') or (chat_class == 'vision'):
-                if (self.gpt_v_enable == True):
-                    if  (len(image_urls) > 0) \
-                    and (len(image_urls) == len(upload_files)):
+                if  (len(image_urls) > 0) \
+                and (len(image_urls) == len(upload_files)):
+                    if   (self.gpt_v_enable == True):
                         model_select = 'v'
+                    elif (self.gpt_x_enable == True):
+                        model_select = 'x'
 
         # history 追加・圧縮 (古いメッセージ)
         res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )
@@ -1002,7 +1052,7 @@ class ChatBotAPI:
             msg = self.history2msg_vision(history=res_history, image_urls=image_urls,)
 
         # ストリーム実行?
-        if (session_id == 'admin'):
+        if (session_id == 'admin') and (self.openai_api_type != 'azure'):
             stream = True
         else:
             stream = False
@@ -1136,7 +1186,6 @@ class ChatBotAPI:
                                 messages        = msg,
                                 max_tokens      = 4000,
                                 timeout         = self.timeOut,
-                                stream          = stream, 
                                 )
 
                     elif (functions != []):
@@ -1151,7 +1200,6 @@ class ChatBotAPI:
                                 tools           = tools,
                                 tool_choice     = 'auto',
                                 timeout         = self.timeOut,
-                                stream          = stream, 
                                 )
 
                     else:
@@ -1161,7 +1209,6 @@ class ChatBotAPI:
                                 messages        = msg,
                                 temperature     = float(temperature),
                                 timeout         = self.timeOut,
-                                stream          = stream, 
                                 )
                     #else:
                     #    completions = self.client_ab.chat.completions.create(
@@ -1170,7 +1217,6 @@ class ChatBotAPI:
                     #        temperature     = float(temperature),
                     #        timeout         = self.timeOut, 
                     #        response_format = { "type": "json_object" },
-                    #        stream          = stream, 
                     #        )
 
                 # Stream 表示
@@ -1343,24 +1389,20 @@ class ChatBotAPI:
                                             print(e)
                                             self.print(session_id, f" ChatGPT : { res_name2.lower() } error!")
 
-                    if (res_content is not None):
-                        #self.print(session_id, res_content.rstrip())
-                        res_text += res_content.rstrip() + '\n'
+            # 正常回答
+            if (res_content is not None):
+                #self.print(session_id, res_content.rstrip())
+                res_text += res_content.rstrip()
 
-                        # History 追加格納
-                        self.seq += 1
-                        dic = {'seq': self.seq, 'time': time.time(), 'role': res_role, 'name': '', 'content': res_text }
-                        res_history.append(dic)
+            # 異常回答
+            else:
+                self.print(session_id, ' ChatGPT : Error !')
 
-                    # 予期せぬ回答
-                    else:
-                        self.print(session_id, ' ChatGPT : Error !')
-                        self.print(session_id, f" ChatGPT : role={ res_role }, content={ res_content }, function_name={ function_name }")
-                        try:
-                            self.print(session_id, completions)
-                        except:
-                            pass
-                        break
+            # History 追加格納
+            if (res_text.strip() != ''):
+                self.seq += 1
+                dic = {'seq': self.seq, 'time': time.time(), 'role': res_role, 'name': '', 'content': res_text }
+                res_history.append(dic)
 
         except Exception as e:
             print(e)
@@ -1725,6 +1767,11 @@ class ChatBotAPI:
         if (self.gpt_v_nick_name != ''):
             if (inpText.strip()[:len(self.gpt_v_nick_name)+1].lower() == (self.gpt_v_nick_name.lower() + ',')):
                 inpText = inpText.strip()[len(self.gpt_v_nick_name)+1:]
+                if (self.gpt_v_enable == True):
+                    if  (len(image_urls) > 0) \
+                    and (len(image_urls) == len(upload_files)):
+                        nick_name  = self.ollama_v_nick_name
+                        model_name = self.ollama_v_model
         if (self.gpt_x_nick_name != ''):
             if (inpText.strip()[:len(self.gpt_x_nick_name)+1].lower() == (self.gpt_x_nick_name.lower() + ',')):
                 inpText = inpText.strip()[len(self.gpt_x_nick_name)+1:]
@@ -1736,10 +1783,12 @@ class ChatBotAPI:
             inpText = inpText.strip()[10:]
         elif (inpText.strip()[:7].lower() == ('openai,')):
             inpText = inpText.strip()[7:]
-        elif (inpText.strip()[:7].lower() == ('google,')):
+        elif (inpText.strip()[:7].lower() == ('claude,')):
             inpText = inpText.strip()[7:]
         elif (inpText.strip()[:7].lower() == ('gemini,')):
             inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:6].lower() == ('local,')):
+            inpText = inpText.strip()[6:]
 
         # history 追加・圧縮 (古いメッセージ)
         res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )
@@ -2291,14 +2340,20 @@ class ChatBotAPI:
         if (self.gpt_x_nick_name != ''):
             if (inpText.strip()[:len(self.gpt_x_nick_name)+1].lower() == (self.gpt_x_nick_name.lower() + ',')):
                 inpText = inpText.strip()[len(self.gpt_x_nick_name)+1:]
-        if (inpText.strip()[:5].lower() == ('riki,')):
+        if   (inpText.strip()[:5].lower() == ('riki,')):
             inpText = inpText.strip()[5:]
-        if (inpText.strip()[:7].lower() == ('vision,')):
+        elif (inpText.strip()[:7].lower() == ('vision,')):
             inpText = inpText.strip()[7:]
-        if (inpText.strip()[:10].lower() == ('assistant,')):
+        elif (inpText.strip()[:10].lower() == ('assistant,')):
             inpText = inpText.strip()[10:]
-        if (inpText.strip()[:7].lower() == ('openai,')):
+        elif (inpText.strip()[:7].lower() == ('openai,')):
             inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:7].lower() == ('claude,')):
+            inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:7].lower() == ('gemini,')):
+            inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:6].lower() == ('local,')):
+            inpText = inpText.strip()[6:]
 
         # history 圧縮 (最後４つ残す)
         old_history = self.history_zip2(history=history, )
@@ -2492,44 +2547,46 @@ Respond according to the following criteria:
 
         # チャットクラス 指定
         if (chat_class == 'auto'):
-            if (inpText.strip()[:len(self.gpt_a_nick_name)+1].lower() == (self.gpt_a_nick_name.lower() + ',')):
-                if (self.gpt_a_enable == True):
+            if (self.gpt_a_nick_name != ''):
+                if (inpText.strip()[:len(self.gpt_a_nick_name)+1].lower() == (self.gpt_a_nick_name.lower() + ',')):
+                    if (self.gpt_a_enable == True):
                         chat_class = 'chat'
-            elif (inpText.strip()[:len(self.gpt_b_nick_name)+1].lower() == (self.gpt_b_nick_name.lower() + ',')):
-                if (self.gpt_b_enable == True):
+            if (self.gpt_b_nick_name != ''):
+                if (inpText.strip()[:len(self.gpt_b_nick_name)+1].lower() == (self.gpt_b_nick_name.lower() + ',')):
+                    if (self.gpt_b_enable == True):
                         chat_class = 'chat'
-            elif (inpText.strip()[:len(self.gpt_v_nick_name)+1].lower() == (self.gpt_v_nick_name.lower() + ',')):
-                if (self.gpt_v_enable == True):
-                    if  (len(image_urls) > 0) \
-                    and (len(image_urls) == len(upload_files)):
-                        chat_class = 'vision'
-            elif (inpText.strip()[:len(self.gpt_x_nick_name)+1].lower() == (self.gpt_x_nick_name.lower() + ',')):
-                if (self.gpt_x_enable == True):
-                        chat_class = 'assistant'
-            elif (inpText.strip()[:5].lower() == ('riki,')):
-                if (self.gpt_x_enable == True):
-                        chat_class = 'assistant'
+            if (self.gpt_v_nick_name != ''):
+                if (inpText.strip()[:len(self.gpt_v_nick_name)+1].lower() == (self.gpt_v_nick_name.lower() + ',')):
+                    if (self.gpt_v_enable == True):
+                        if  (len(image_urls) > 0) \
+                        and (len(image_urls) == len(upload_files)):
+                            chat_class = 'vision'
+            if (self.gpt_x_nick_name != ''):
+                if (inpText.strip()[:len(self.gpt_x_nick_name)+1].lower() == (self.gpt_x_nick_name.lower() + ',')):
+                    if (self.gpt_x_enable == True):
+                            chat_class = 'assistant'
+
+        if (chat_class == 'auto'):
+            if   (inpText.strip()[:5].lower() == ('riki,')):
+                chat_class = 'assistant'
             elif (inpText.strip()[:7].lower() == ('vision,')):
-                if (self.gpt_v_enable == True):
-                    if  (len(image_urls) > 0) \
-                    and (len(image_urls) == len(upload_files)):
-                        chat_class = 'vision'
+                chat_class = 'vision'
             elif (inpText.strip()[:10].lower() == ('assistant,')):
-                if (self.gpt_x_enable == True):
-                        chat_class = 'assistant'
+                chat_class = 'assistant'
             elif (inpText.strip()[:7].lower() == ('openai,')):
-                if (self.gpt_b_enable == True):
-                        chat_class = 'chat'
+                chat_class = 'chat'
+            elif (inpText.strip()[:7].lower() == ('claude,')):
+                chat_class = 'chat'
+            elif (inpText.strip()[:7].lower() == ('gemini,')):
+                chat_class = 'chat'
+            elif (inpText.strip()[:6].lower() == ('local,')):
+                chat_class = 'chat'
 
         # ChatGPT
-        if   (chat_class == 'auto') \
-        or   (chat_class == 'openai') \
-        or   (chat_class == 'chat') \
-        or   (chat_class == 'vision') \
-        or  ((chat_class != 'knowledge') \
-        and  (chat_class != 'code_interpreter') \
-        and  (chat_class != 'assistant') \
-        and  (model_select != 'x')):
+        if   ((chat_class != 'knowledge') \
+        and   (chat_class != 'code_interpreter') \
+        and   (chat_class != 'assistant') \
+        and   (model_select != 'x')):
             #try:
                 res_text, res_path, res_files, nick_name, model_name, res_history = \
                     self.run_gpt(chat_class=chat_class, model_select=model_select,
@@ -2555,32 +2612,8 @@ Respond according to the following criteria:
             #    print(e)
 
         # 文書成形
-        if (res_text != ''):
-            text = res_text
-            text = text.replace('\r', '')
-
-            text = text.replace('。', '。\n')
-            text = text.replace('？', '？\n')
-            text = text.replace('！', '！\n')
-            text = text.replace('。\n」','。」')
-            text = text.replace('。\n"' ,'。"')
-            text = text.replace("。\n'" ,"。'")
-            text = text.replace('？\n」','？」')
-            text = text.replace('？\n"' ,'？"')
-            text = text.replace("？\n'" ,"？'")
-            text = text.replace('！\n」','！」')
-            text = text.replace('！\n"' ,'！"')
-            text = text.replace("！\n'" ,"！'")
-
-            hit = True
-            while (hit == True):
-                if (text.find('\n\n')>0):
-                    hit = True
-                    text = text.replace('\n\n', '\n')
-                else:
-                    hit = False
-            text = text.strip()
-
+        text = self.text_replace(text=res_text, )
+        if (text.strip() != ''):
             res_text = text
         else:
             res_text = '!'
@@ -2618,7 +2651,7 @@ if __name__ == '__main__':
                             openai_key.getkey('chatgpt','gpt_b_model3'), openai_key.getkey('chatgpt','gpt_b_token3'),
                             openai_key.getkey('chatgpt','gpt_b_length'),
                             openai_key.getkey('chatgpt','gpt_v_nick_name'),
-                            openai_key.getkey('chatgpt','gpt_v_model1'), openai_key.getkey('chatgpt','gpt_v_token1'),
+                            openai_key.getkey('chatgpt','gpt_v_model'), openai_key.getkey('chatgpt','gpt_v_token'),
                             openai_key.getkey('chatgpt','gpt_x_nick_name'),
                             openai_key.getkey('chatgpt','gpt_x_model1'), openai_key.getkey('chatgpt','gpt_x_token1'),
                             openai_key.getkey('chatgpt','gpt_x_model2'), openai_key.getkey('chatgpt','gpt_x_token2'),
@@ -2641,7 +2674,7 @@ if __name__ == '__main__':
                             openai_key.getkey('chatgpt','azure_b_model3'), openai_key.getkey('chatgpt','azure_b_token3'),
                             openai_key.getkey('chatgpt','azure_b_length'),
                             openai_key.getkey('chatgpt','azure_v_nick_name'),
-                            openai_key.getkey('chatgpt','azure_v_model1'), openai_key.getkey('chatgpt','azure_v_token1'),
+                            openai_key.getkey('chatgpt','azure_v_model'), openai_key.getkey('chatgpt','azure_v_token'),
                             openai_key.getkey('chatgpt','azure_x_nick_name'),
                             openai_key.getkey('chatgpt','azure_x_model1'), openai_key.getkey('chatgpt','azure_x_token1'),
                             openai_key.getkey('chatgpt','azure_x_model2'), openai_key.getkey('chatgpt','azure_x_token2'),
@@ -2656,7 +2689,6 @@ if __name__ == '__main__':
                 import    speech_bot_function
                 botFunc = speech_bot_function.botFunction()
 
-                #res, msg = openaiAPI.functions_load(functions_path='_extensions/function/', secure_level='medium', )
                 res, msg = botFunc.functions_load(
                     functions_path='_extensions/function/', secure_level='low', )
                 if (res != True) or (msg != ''):
@@ -2685,7 +2717,7 @@ if __name__ == '__main__':
                 print('', res_text)
                 print()
 
-            if False:
+            if True:
                 sysText = None
                 reqText = ''
                 inpText = '今日は何月何日？'
@@ -2722,7 +2754,7 @@ if __name__ == '__main__':
                 print('', res_text)
                 print()
 
-            if True:
+            if False:
                 sysText = None
                 reqText = ''
                 inpText = 'riki,おはようございます。'
@@ -2741,7 +2773,7 @@ if __name__ == '__main__':
                 print('', res_text)
                 print()
 
-            if True:
+            if False:
                 sysText = None
                 reqText = ''
                 inpText = 'riki,今日は何月何日？'
