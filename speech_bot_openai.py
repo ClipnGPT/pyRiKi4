@@ -47,7 +47,6 @@ import speech_bot_openai_key  as openai_key
 qPath_temp           = 'temp/'
 qPath_output         = 'temp/output/'
 qPath_chat_work      = 'temp/chat_work/'
-qPath_retrieval_work = 'temp/chat_retrieval_work/'
 
 
 
@@ -488,8 +487,6 @@ class ChatBotAPI:
             os.mkdir(qPath_output)
         if (not os.path.isdir(qPath_chat_work)):
             os.mkdir(qPath_chat_work)
-        if (not os.path.isdir(qPath_retrieval_work)):
-            os.mkdir(qPath_retrieval_work)
 
         # 認証
         self.bot_auth               = None
@@ -1058,7 +1055,8 @@ class ChatBotAPI:
             stream = False
 
         # 実行ループ
-        try:
+        #try:
+        if True:
 
             n = 0
             function_name = ''
@@ -1404,9 +1402,9 @@ class ChatBotAPI:
                 dic = {'seq': self.seq, 'time': time.time(), 'role': res_role, 'name': '', 'content': res_text }
                 res_history.append(dic)
 
-        except Exception as e:
-            print(e)
-            res_text = ''
+        #except Exception as e:
+        #    print(e)
+        #    res_text = ''
 
         return res_text, res_path, res_files, res_name, res_api, res_history
 
@@ -1929,8 +1927,9 @@ class ChatBotAPI:
         else:
             stream = False
 
-        # 実行開始
-        try:
+        # 実行開始        
+        #try:
+        if True:
             if (stream == True):
                 # 初期化
                 my_handler = my_eventHandler(log_queue=self.log_queue, my_seq=self.seq,
@@ -2235,9 +2234,9 @@ class ChatBotAPI:
                         self.print(session_id, )
                         #time.sleep(0.50)
 
-        except Exception as e:
-            print(e)
-            res_content = None
+        #except Exception as e:
+        #    print(e)
+        #    res_content = None
 
         if (exit_status is None):
             exit_status = 'timeout'

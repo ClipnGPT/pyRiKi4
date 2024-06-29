@@ -289,7 +289,8 @@ class _claudeAPI:
 
                 for file_name in filePath:
                     if (os.path.isfile(file_name)):
-                        if (os.path.getsize(file_name) <= 20000000):
+                        # 2024/06/26 時点 max 10Mbyte 
+                        if (os.path.getsize(file_name) <= 10000000):
 
                             upload_files.append(file_name)
                             file_ext = os.path.splitext(file_name)[1][1:].lower()
