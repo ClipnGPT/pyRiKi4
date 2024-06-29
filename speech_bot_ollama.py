@@ -579,7 +579,8 @@ class _ollamaAPI:
         stream = False
 
         # 実行ループ
-        try:
+        #try:
+        if True:
 
             n = 0
             function_name = ''
@@ -651,9 +652,9 @@ class _ollamaAPI:
                 dic = {'seq': self.seq, 'time': time.time(), 'role': 'assistant', 'name': '', 'content': res_text }
                 res_history.append(dic)
 
-        except Exception as e:
-            print(e)
-            res_text = ''
+        #except Exception as e:
+        #    print(e)
+        #    res_text = ''
 
         return res_text, res_path, res_files, res_name, res_api, res_history
 

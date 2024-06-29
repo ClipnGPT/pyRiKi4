@@ -565,7 +565,8 @@ class _geminiAPI:
             stream = False
 
         # 実行ループ
-        try:
+        #try:
+        if True:
 
             n = 0
             function_name = ''
@@ -762,9 +763,9 @@ class _geminiAPI:
             #    self.print(session_id, f" Gemini  : Delete file { f.name }.")
             #    genai.delete_file(f.name)
 
-        except Exception as e:
-            print(e)
-            res_text = ''
+        #except Exception as e:
+        #    print(e)
+        #    res_text = ''
 
         return res_text, res_path, res_files, res_name, res_api, res_history
 
@@ -865,7 +866,7 @@ if __name__ == '__main__':
             if True:
                 sysText = None
                 reqText = ''
-                inpText = 'おはようございます。'
+                inpText = 'flash,おはようございます。'
                 print()
                 print('[Request]')
                 print(reqText, inpText )
