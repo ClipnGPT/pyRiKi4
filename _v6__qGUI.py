@@ -612,25 +612,11 @@ class qGUI_class:
 
         if edit_element:
             try:
-                # WM_GETTEXTLENGTHメッセージを送信して現在のテキストの長さを取得
-                WM_GETTEXTLENGTH = 0x000E
-                WM_GETTEXT = 0x000D
-                WM_SETTEXT = 0x000C
-                EM_SETSEL = 0x00B1
-                length = ctypes.windll.user32.SendMessageW(edit_element.CurrentNativeWindowHandle, WM_GETTEXTLENGTH, 0, 0)
-                
-                # 現在のテキストを取得
-                buffer = ctypes.create_unicode_buffer(length + 1)
-                ctypes.windll.user32.SendMessageW(edit_element.CurrentNativeWindowHandle, WM_GETTEXT, length + 1, ctypes.byref(buffer))
-                current_text = buffer.value
+                EM_REPLACESEL = 0x00C2
 
-                # 新しいテキストを設定
-                new_text = current_text + out_txt
-                ctypes.windll.user32.SendMessageW(edit_element.CurrentNativeWindowHandle, WM_SETTEXT, 0, new_text)
-
-                # カーソルを文末に移動
-                new_length = len(new_text)
-                ctypes.windll.user32.SendMessageW(edit_element.CurrentNativeWindowHandle, EM_SETSEL, new_length, new_length)
+                # 選択範囲を置換
+                for char in out_txt:
+                    ctypes.windll.user32.SendMessageW(edit_element.CurrentNativeWindowHandle, EM_REPLACESEL, True, char)
 
                 return True
             except Exception as e:

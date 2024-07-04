@@ -16,16 +16,15 @@ import datetime
 import codecs
 import shutil
 
-import base64
 import json
-
 import queue
+import base64
 
+
+
+# anthropic(claude) チャットボット
 import anthropic
 
-
-
-# claude チャットボット
 import speech_bot_claude_key  as claude_key
 
 
@@ -327,17 +326,22 @@ class _claudeAPI:
             self.print(session_id, ' claude  : Not Authenticate Error !')
             return res_text, res_path, res_name, res_api, res_history
 
-        # チャットクラス確認
+        # モデル 設定
         res_name = self.claude_a_nick_name
         res_api  = self.claude_a_model
         if  (chat_class == 'claude'):
             if (self.claude_b_enable == True):
                 res_name = self.claude_b_nick_name
                 res_api  = self.claude_b_model
-        if  (chat_class == 'knowledge') \
-        or  (chat_class == 'code_interpreter') \
-        or  (chat_class == 'assistant') \
-        or  (model_select == 'x'):
+
+        # モデル 補正 (assistant)
+        if ((chat_class == 'assistant') \
+        or  (chat_class == 'コード生成') \
+        or  (chat_class == 'コード実行') \
+        or  (chat_class == '文書検索') \
+        or  (chat_class == '複雑な会話') \
+        or  (chat_class == 'アシスタント') \
+        or  (model_select == 'x')):
             if (self.claude_x_enable == True):
                 res_name = self.claude_x_nick_name
                 res_api  = self.claude_x_model
@@ -401,10 +405,14 @@ class _claudeAPI:
             inpText = inpText.strip()[7:]
         elif (inpText.strip()[:7].lower() == ('gemini,')):
             inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:11].lower() == ('perplexity,')):
+            inpText = inpText.strip()[11:]
+        elif (inpText.strip()[:5].lower() == ('pplx,')):
+            inpText = inpText.strip()[5:]
         elif (inpText.strip()[:6].lower() == ('local,')):
             inpText = inpText.strip()[6:]
 
-        # モデル
+        # モデル 未設定時
         if (res_api is None):
             res_name = self.claude_a_nick_name
             res_api  = self.claude_a_model
@@ -414,7 +422,7 @@ class _claudeAPI:
                     res_name = self.claude_b_nick_name
                     res_api  = self.claude_b_model
 
-        # モデル補正
+        # モデル 補正 (vision)
         if  (len(image_urls) > 0) \
         and (len(image_urls) == len(upload_files)):
             if   (self.claude_v_enable == True):
