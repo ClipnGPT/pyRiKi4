@@ -16,17 +16,13 @@ import datetime
 import codecs
 import shutil
 
-import glob
-import base64
-
 import json
+import queue
+import base64
+import glob
 
 import socket
-
-from openai.types.beta.threads import Message
 qHOSTNAME = socket.gethostname().lower()
-
-import queue
 
 
 
@@ -36,10 +32,11 @@ import openai
 from typing_extensions import override
 from openai import AssistantEventHandler
 from openai.types.beta import AssistantStreamEvent
-#from openai.types.beta.threads import Text, TextDelta, Message, MessageDelta
+#from openai.types.beta.threads import Message
 from openai.types.beta.threads.runs import ToolCall, ToolCallDelta, RunStep
 
 import tiktoken
+
 import speech_bot_openai_key  as openai_key
 
 
@@ -1020,6 +1017,14 @@ class ChatBotAPI:
             inpText = inpText.strip()[7:]
             if (self.gpt_b_enable == True):
                     model_select = 'b'
+        elif (inpText.strip()[:11].lower() == ('perplexity,')):
+            inpText = inpText.strip()[11:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'b'
+        elif (inpText.strip()[:5].lower() == ('pplx,')):
+            inpText = inpText.strip()[5:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'x'
         elif (inpText.strip()[:7].lower() == ('local,')):
             inpText = inpText.strip()[7:]
             if (self.gpt_b_enable == True):
@@ -1782,6 +1787,10 @@ class ChatBotAPI:
             inpText = inpText.strip()[7:]
         elif (inpText.strip()[:7].lower() == ('gemini,')):
             inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:11].lower() == ('perplexity,')):
+            inpText = inpText.strip()[11:]
+        elif (inpText.strip()[:5].lower() == ('pplx,')):
+            inpText = inpText.strip()[5:]
         elif (inpText.strip()[:6].lower() == ('local,')):
             inpText = inpText.strip()[6:]
 
@@ -2567,10 +2576,14 @@ Respond according to the following criteria:
                 chat_class = 'chat'
 
         # ChatGPT
-        if   ((chat_class != 'knowledge') \
-        and   (chat_class != 'code_interpreter') \
-        and   (chat_class != 'assistant') \
-        and   (model_select != 'x')):
+        if  ((chat_class != 'assistant') \
+        and  (chat_class != 'コード生成') \
+        and  (chat_class != 'コード実行') \
+        and  (chat_class != '文書検索') \
+        and  (chat_class != '複雑な会話') \
+        and  (chat_class != 'アシスタント') \
+        and  (model_select != 'x')):
+
             #try:
                 res_text, res_path, res_files, nick_name, model_name, res_history = \
                     self.run_gpt(chat_class=chat_class, model_select=model_select,

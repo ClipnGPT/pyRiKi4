@@ -16,17 +16,16 @@ import datetime
 import codecs
 import shutil
 
-import base64
 import json
-
 import queue
-
-import google.generativeai as genai
-#import google.ai.generativelanguage as glm
+import base64
 
 
 
 # gemini チャットボット
+import google.generativeai as genai
+#import google.ai.generativelanguage as glm
+
 import speech_bot_gemini_key  as gemini_key
 
 
@@ -162,15 +161,18 @@ class _geminiAPI:
         try:
             genai.configure(api_key=gemini_key_id, ) 
         except Exception as e:
-            print(e)
+            print('configure error', e)
             return False
 
         # モデル一覧
         hit = False
-        try:
+        #try:
+        if False:
             for m in genai.list_models():
+                #print(m.supported_generation_methods)
                 if 'generateContent' in m.supported_generation_methods:
                     model = m.name.replace('models/', '')
+                    #print(model)
                     if (model == self.gemini_a_model):
                         #print(model)
                         self.gemini_a_enable = True
@@ -187,8 +189,14 @@ class _geminiAPI:
                         #print(model)
                         self.gemini_x_enable = True
                         hit = True
-        except Exception as e:
-            print(e)
+        #except Exception as e:
+        #    print('list_models error', e)
+
+        self.gemini_a_enable = True
+        self.gemini_b_enable = True
+        self.gemini_v_enable = True
+        self.gemini_x_enable = True
+        hit = True
 
         if (hit == True):
             self.bot_auth = True
@@ -333,17 +341,22 @@ class _geminiAPI:
             self.print(session_id, ' Gemini  : Not Authenticate Error !')
             return res_text, res_path, res_name, res_api, res_history
 
-        # チャットクラス確認
+        # モデル 設定
         res_name = self.gemini_a_nick_name
         res_api  = self.gemini_a_model
         if  (chat_class == 'gemini'):
             if (self.gemini_b_enable == True):
                 res_name = self.gemini_b_nick_name
                 res_api  = self.gemini_b_model
-        if  (chat_class == 'knowledge') \
-        or  (chat_class == 'code_interpreter') \
-        or  (chat_class == 'assistant') \
-        or  (model_select == 'x'):
+
+        # モデル 補正 (assistant)
+        if ((chat_class == 'assistant') \
+        or  (chat_class == 'コード生成') \
+        or  (chat_class == 'コード実行') \
+        or  (chat_class == '文書検索') \
+        or  (chat_class == '複雑な会話') \
+        or  (chat_class == 'アシスタント') \
+        or  (model_select == 'x')):
             if (self.gemini_x_enable == True):
                 res_name = self.gemini_x_nick_name
                 res_api  = self.gemini_x_model
@@ -410,10 +423,14 @@ class _geminiAPI:
             inpText = inpText.strip()[7:]
         elif (inpText.strip()[:7].lower() == ('gemini,')):
             inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:11].lower() == ('perplexity,')):
+            inpText = inpText.strip()[11:]
+        elif (inpText.strip()[:5].lower() == ('pplx,')):
+            inpText = inpText.strip()[5:]
         elif (inpText.strip()[:6].lower() == ('local,')):
             inpText = inpText.strip()[6:]
 
-        # モデル
+        # モデル 未設定時
         if (res_api is None):
             res_name = self.gemini_a_nick_name
             res_api  = self.gemini_a_model
@@ -423,7 +440,7 @@ class _geminiAPI:
                     res_name = self.gemini_b_nick_name
                     res_api  = self.gemini_b_model
 
-        # モデル補正
+        # モデル 補正 (vision)
         if  (len(image_urls) > 0) \
         and (len(image_urls) == len(upload_files)):
             if   (self.gemini_v_enable == True):
