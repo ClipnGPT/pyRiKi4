@@ -693,9 +693,7 @@ class ChatBotAPI:
         res_history = history
 
         # sysText, reqText, inpText -> history
-        if (sysText is None):
-            sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
-        if (sysText.strip() != ''):
+        if (sysText is not None) and (sysText.strip() != ''):
             if (len(res_history) > 0):
                 if (sysText.strip() != res_history[0]['content'].strip()):
                     res_history = []
@@ -703,16 +701,14 @@ class ChatBotAPI:
                 self.seq += 1
                 dic = {'seq': self.seq, 'time': time.time(), 'role': 'system', 'name': '', 'content': sysText.strip() }
                 res_history.append(dic)
-        if (reqText is not None):
-            if (reqText.strip() != ''):
-                self.seq += 1
-                dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': reqText.strip() }
-                res_history.append(dic)
+        if (reqText is not None) and (reqText.strip() != ''):
+            self.seq += 1
+            dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': reqText.strip() }
+            res_history.append(dic)
         if (inpText.strip() != ''):
-            if (inpText.rstrip() != ''):
-                self.seq += 1
-                dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': inpText.rstrip() }
-                res_history.append(dic)
+            self.seq += 1
+            dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': inpText.rstrip() }
+            res_history.append(dic)
 
         return res_history
 
@@ -954,6 +950,7 @@ class ChatBotAPI:
                 sysText=None, reqText=None, inpText='こんにちは',
                 upload_files=[], image_urls=[], 
                 temperature=0.8, max_step=10, jsonMode=False, ):
+
         #self.assistant_id[str(session_id)] = None
         self.thread_id[str(session_id)] = None
         functions = []
@@ -2415,30 +2412,15 @@ Respond according to the following criteria:
             n += 1
             self.print(session_id, f" Assistant : { model_name }, pass={ n }, ")
 
-            # OpenAI
-            if (self.openai_api_type != 'azure'):
-
-                # Assistant
-                res_text2, res_path2, res_files2, nick_name, model_name, res_history = \
-                    self.run_assistant(chat_class=chat_class, model_select=model_select,
-                                       nick_name=nick_name, model_name=model_name,
-                                       session_id=session_id, history=res_history, function_modules=function_modules, 
-                                       sysText=sysText, reqText=reqText, inpText=inpText,
-                                       upload_files=upload_files, image_urls=image_urls,
-                                       temperature=temperature, max_step=max_step, jsonMode=jsonMode, )
+            # Assistant
+            res_text2, res_path2, res_files2, nick_name, model_name, res_history = \
+                self.run_assistant(chat_class=chat_class, model_select=model_select,
+                                    nick_name=nick_name, model_name=model_name,
+                                    session_id=session_id, history=res_history, function_modules=function_modules, 
+                                    sysText=sysText, reqText=reqText, inpText=inpText,
+                                    upload_files=upload_files, image_urls=image_urls,
+                                    temperature=temperature, max_step=max_step, jsonMode=jsonMode, )
             
-            # Azure
-            else:
-
-                # Assistant
-                res_text2, res_path2, res_files2, nick_name, model_name, res_history = \
-                    self.run_assistant(chat_class=chat_class, model_select=model_select,
-                                       nick_name=nick_name, model_name=model_name,
-                                       session_id=session_id, history=res_history, function_modules=function_modules,
-                                       sysText=sysText, reqText=reqText, inpText=inpText,
-                                       upload_files=upload_files, image_urls=image_urls, 
-                                       temperature=temperature, max_step=max_step, jsonMode=jsonMode, )
-
             if  (res_text2 is not None) \
             and (res_text2 != '') \
             and (res_text2 != '!'):
@@ -2531,6 +2513,9 @@ Respond according to the following criteria:
         nick_name       = None
         model_name      = None
         res_history     = history
+
+        if (sysText is None):
+            sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
 
         if (self.bot_auth is None):
             self.print(session_id, 'ChatGPT: Not Authenticate Error !')
@@ -2772,10 +2757,11 @@ if __name__ == '__main__':
                 print('', res_text)
                 print()
 
-            if False:
+            if True:
                 sysText = None
                 reqText = ''
-                inpText = 'riki,今日は何月何日？'
+                #inpText = 'riki,今日は何月何日？'
+                inpText = 'riki,日本の主要３都市の天気？'
                 filePath = []
                 print('[Request]')
                 print(reqText, inpText )
@@ -2816,7 +2802,6 @@ if __name__ == '__main__':
                 #inpText = '計算式 123 * 456 * (7 + 8) の答え？'
                 #inpText = 'riki,東京の天気？'
                 #inpText = 'gpt4,日本の主要３都市の天気？'
-                #inpText = 'riki,日本の主要３都市の天気？'
                 inpText = 'riki,今日は何月何日？'
                 #inpText = 'riki,私のニックネームを覚えていますか？'
                 #inpText = 'riki,小説でマインは何階に住んでいますか？'

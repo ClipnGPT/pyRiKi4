@@ -19,9 +19,10 @@ if (os.name == 'nt'):
     import ctypes
     from ctypes import wintypes
     #import win32con
+    import comtypes.client
 
 import array
-
+import platform
 import pyperclip
 
 
@@ -51,6 +52,10 @@ class qGUI_class:
         self.last_SP_result_s = 0
 
         self.checkUpdateScreenInfo(update=True, )
+
+        if (os.name == 'nt'):
+            self.UIAutomation = comtypes.client.GetModule("UIAutomationCore.dll")
+            self.IUIAutomation = comtypes.client.CreateObject("{ff48dba4-60ef-4201-aa87-54103eef594e}", interface=self.UIAutomation.IUIAutomation)
 
 
 
@@ -522,48 +527,113 @@ class qGUI_class:
 
 
 
-    def notePad(self, txt='', cr=True, lf=False, ):
-        if (os.name != 'nt'):
-            return False
-
-        winTitle  = '無題 - メモ帳'
-        parent_handle = ctypes.windll.user32.FindWindowW(0, winTitle)
-        if (parent_handle == 0):
-            winTitle  = '*無題 - メモ帳'
-            parent_handle = ctypes.windll.user32.FindWindowW(0, winTitle)
-            if (parent_handle == 0):
-                return False
-
-        out_txt = txt
-        if (cr==True) or (lf==True):
-            out_txt = out_txt.replace('\r', '')
-            out_txt = out_txt.replace('\n', '')
-        if (cr==True):
-            out_txt += '\r'
-        if (lf==True):
-            out_txt += '\n'
-
-        if (True):
-        #try:
-            child_handles = array.array('i')
-            ENUM_CHILD_WINDOWS = ctypes.WINFUNCTYPE( \
-                                ctypes.c_int, \
-                                ctypes.c_int, \
-                                ctypes.py_object)
-            ctypes.windll.user32.EnumChildWindows( \
-                                parent_handle, \
-                                ENUM_CHILD_WINDOWS(self.enum_child_windows_proc), \
-                                ctypes.py_object(child_handles) )
-            WM_CHAR = 0x0102
-            for i in range(len(out_txt)):
-                ctypes.windll.user32.SendMessageW(child_handles[0], WM_CHAR, (ord(out_txt[i])), 0)
-            return True
-        #except Exception as e:
-        #    return False
-
     def enum_child_windows_proc(self, handle, list):
         list.append(handle)
         return 1
+
+    def notePad10(self, txt='', cr=True, lf=False):
+        winTitle = '無題 - メモ帳'
+        parent_handle = ctypes.windll.user32.FindWindowW(0, winTitle)
+        if parent_handle == 0:
+            winTitle = '*無題 - メモ帳'
+            parent_handle = ctypes.windll.user32.FindWindowW(0, winTitle)
+            if parent_handle == 0:
+                return False
+
+        out_txt = txt
+        if cr or lf:
+            out_txt = out_txt.replace('\r', '').replace('\n', '')
+        if cr:
+            out_txt += '\r'
+        if lf:
+            out_txt += '\n'
+
+        try:
+            child_handles = array.array('i')
+            ENUM_CHILD_WINDOWS = ctypes.WINFUNCTYPE(
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.py_object
+            )
+            ctypes.windll.user32.EnumChildWindows(
+                parent_handle,
+                ENUM_CHILD_WINDOWS(self.enum_child_windows_proc),
+                ctypes.py_object(child_handles)
+            )
+            WM_CHAR = 0x0102
+            for i in range(len(out_txt)):
+                ctypes.windll.user32.SendMessageW(child_handles[0], WM_CHAR, ord(out_txt[i]), 0)
+            return True
+        except Exception as e:
+            print(f"Error: {e}")
+            return False
+
+    def find_edit_control(self, element, depth=0, max_depth=10):
+        if depth > max_depth:
+            return None
+
+        try:
+            control_type = element.CurrentControlType
+            class_name = element.CurrentClassName
+
+            if control_type == self.UIAutomation.UIA_EditControlTypeId or class_name == "RichEditD2DPT":
+                return element
+
+            children = element.FindAll(self.UIAutomation.TreeScope_Children, self.IUIAutomation.CreateTrueCondition())
+            for i in range(children.Length):
+                child = children.GetElement(i)
+                result = self.find_edit_control(child, depth + 1, max_depth)
+                if result:
+                    return result
+        except Exception as e:
+            print(f"Error at depth {depth}: {e}")
+
+        return None
+        
+    def notePad11(self, txt='', cr=True, lf=False):
+        winTitle = 'タイトルなし - メモ帳'
+        notepad_window = ctypes.windll.user32.FindWindowW(None, winTitle)
+        if notepad_window == 0:
+            winTitle = '*タイトルなし - メモ帳'
+            notepad_window = ctypes.windll.user32.FindWindowW(None, winTitle)
+            if notepad_window == 0:
+                return False
+
+        out_txt = txt
+        if cr or lf:
+            out_txt = out_txt.replace('\r', '').replace('\n', '')
+        if cr:
+            out_txt += '\r'
+        if lf:
+            out_txt += '\n'
+
+        element = self.IUIAutomation.ElementFromHandle(notepad_window)
+        edit_element = self.find_edit_control(element)
+
+        if edit_element:
+            try:
+                EM_REPLACESEL = 0x00C2
+
+                # 選択範囲を置換
+                for char in out_txt:
+                    ctypes.windll.user32.SendMessageW(edit_element.CurrentNativeWindowHandle, EM_REPLACESEL, True, char)
+
+                return True
+            except Exception as e:
+                print(f"Error: {e}")
+        return False
+
+    def notePad(self, txt='', cr=True, lf=False):
+        if (os.name != 'nt'):
+            return False
+        version = platform.release()
+        if version == '10':
+            return self.notePad10(txt, cr, lf)
+        elif version == '11':
+            return self.notePad11(txt, cr, lf)
+        else:
+            #print(f"Unsupported Windows version: {version}")
+            return False
 
 
 
