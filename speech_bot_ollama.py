@@ -310,9 +310,7 @@ class _ollamaAPI:
         res_history = history
 
         # sysText, reqText, inpText -> history
-        if (sysText is None):
-            sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
-        if (sysText.strip() != ''):
+        if (sysText is not None) and (sysText.strip() != ''):
             if (len(res_history) > 0):
                 if (sysText.strip() != res_history[0]['content'].strip()):
                     res_history = []
@@ -320,16 +318,14 @@ class _ollamaAPI:
                 self.seq += 1
                 dic = {'seq': self.seq, 'time': time.time(), 'role': 'system', 'name': '', 'content': sysText.strip() }
                 res_history.append(dic)
-        if (reqText is not None):
-            if (reqText.strip() != ''):
-                self.seq += 1
-                dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': reqText.strip() }
-                res_history.append(dic)
+        if (reqText is not None) and (reqText.strip() != ''):
+            self.seq += 1
+            dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': reqText.strip() }
+            res_history.append(dic)
         if (inpText.strip() != ''):
-            if (inpText.rstrip() != ''):
-                self.seq += 1
-                dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': inpText.rstrip() }
-                res_history.append(dic)
+            self.seq += 1
+            dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': inpText.rstrip() }
+            res_history.append(dic)
 
         return res_history
 
@@ -397,9 +393,6 @@ class _ollamaAPI:
                 sysText=None, reqText=None, inpText='こんにちは',
                 upload_files=[], image_urls=[], 
                 temperature=0.8, max_step=10, jsonMode=False, ):
-
-        if (sysText is None):
-            sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
 
         # 戻り値
         res_text        = ''
@@ -579,7 +572,8 @@ class _ollamaAPI:
         stream = False
 
         # 実行ループ
-        try:
+        #try:
+        if True:
 
             n = 0
             function_name = ''
@@ -651,9 +645,9 @@ class _ollamaAPI:
                 dic = {'seq': self.seq, 'time': time.time(), 'role': 'assistant', 'name': '', 'content': res_text }
                 res_history.append(dic)
 
-        except Exception as e:
-            print(e)
-            res_text = ''
+        #except Exception as e:
+        #    print(e)
+        #    res_text = ''
 
         return res_text, res_path, res_files, res_name, res_api, res_history
 
@@ -672,6 +666,9 @@ class _ollamaAPI:
         nick_name   = None
         model_name  = None
         res_history = history
+
+        if (sysText is None):
+            sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
 
         if (self.bot_auth is None):
             self.print(session_id, ' ollama : Not Authenticate Error !')
@@ -770,7 +767,7 @@ if __name__ == '__main__':
                 print(str(res_text))
                 print()
 
-            if False:
+            if True:
                 sysText = None
                 reqText = ''
                 inpText = '画像検索に利用できるように、この画像の内容を箇条書きで教えてください。'

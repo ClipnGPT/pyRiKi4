@@ -33,6 +33,7 @@ ECHO -------
     python -m pip  install --upgrade screeninfo
     python -m pip  install --upgrade pyautogui
     python -m pip  install --upgrade pywin32
+    python -m pip  install --upgrade comtypes
     python -m pip  install --upgrade psutil
     python -m pip  install --upgrade rainbow-logging-handler
     python -m pip  install --upgrade pycryptodome
