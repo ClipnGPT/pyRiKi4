@@ -45,7 +45,7 @@ rem python -m pip  install --upgrade opencv-contrib-python
     python -m pip  install --upgrade opencv-python==4.9.0.80
     python -m pip  install --upgrade opencv-contrib-python==4.9.0.80
 
-    python -m pip  install --upgrade pysimplegui==4.60.5
+    python -m pip  install --upgrade pysimplegui
     python -m pip  install --upgrade pillow
 
 ECHO;

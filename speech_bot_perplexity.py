@@ -270,20 +270,32 @@ class _perplexityAPI:
 
         return res_history
 
-    def history2msg_gpt(self, history=[], ):
-        res_msg = []
-        for h in range(len(history)):
-            role    = history[h]['role']
-            content = history[h]['content']
-            name    = history[h]['name']
-            if (role != 'function_call'):
-            #if True:
-                if (name == ''):
-                    dic = {'role': role, 'content': content }
-                    res_msg.append(dic)
+    def history2msg_pplx(self, history=[], ):
+        # 過去メッセージ追加
+        msg_text = ''
+        if (len(history) > 1):
+            msg_text += "''' これは過去の会話履歴です。\n"
+            for m in range(len(history) - 1):
+                role    = history[m].get('role','')
+                content = history[m].get('content','')
+                name    = history[m].get('name','')
+                # 全てユーザーメッセージにて処理
+                if (name is None) or (name == ''):
+                    msg_text += '(' + role + ')' + '\n' + content + '\n'
                 else:
-                    dic = {'role': role, 'name': name, 'content': content }
-                    res_msg.append(dic)
+                    if (role == 'function_call'):
+                        msg_text += '(function ' + name + ' call)'  + '\n' + content + '\n'
+                    else:
+                        msg_text += '(function ' + name + ' result) ' + '\n' + content + '\n'
+            msg_text += "''' 会話履歴はここまでです。\n"
+            msg_text += "\n"
+        m = len(history) - 1
+        msg_text += history[m].get('content', '')
+        #print(msg_text)
+
+        res_msg = []
+        dic = {'role': 'user', 'content': msg_text }
+        res_msg.append(dic)
 
         return res_msg
 
@@ -456,7 +468,7 @@ class _perplexityAPI:
         res_history = self.history_zip1(history=res_history, )
 
         # メッセージ作成
-        msg = self.history2msg_gpt(history=res_history, )
+        msg = self.history2msg_pplx(history=res_history, )
 
         # ストリーム実行?
         if (session_id == 'admin'):

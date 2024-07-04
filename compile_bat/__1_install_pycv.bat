@@ -63,7 +63,7 @@ ECHO -------
     python -m pip  install --upgrade pycryptodome
 
     python -m pip  install --upgrade matplotlib
-    python -m pip  install --upgrade pysimplegui==4.60.5
+    python -m pip  install --upgrade pysimplegui
     python -m pip  install --upgrade pykakasi
 rem ↓ use vs code
     python -m pip  install --upgrade pylint

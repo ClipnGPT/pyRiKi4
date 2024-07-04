@@ -351,6 +351,32 @@ class _ollamaAPI:
 
         return res_history
 
+    def history2msg_text(self, history=[], ):
+        # 過去メッセージ追加
+        msg_text = ''
+        if (len(history) > 2):
+            msg_text += "''' これは過去の会話履歴です。\n"
+            for m in range(len(history) - 2):
+                role    = history[m+1].get('role','')
+                content = history[m+1].get('content','')
+                name    = history[m+1].get('name','')
+                if (role != 'system'):
+                    # 全てユーザーメッセージにて処理
+                    if (name is None) or (name == ''):
+                        msg_text += '(' + role + ')' + '\n' + content + '\n'
+                    else:
+                        if (role == 'function_call'):
+                            msg_text += '(function ' + name + ' call)'  + '\n' + content + '\n'
+                        else:
+                            msg_text += '(function ' + name + ' result) ' + '\n' + content + '\n'
+            msg_text += "''' 会話履歴はここまでです。\n"
+            msg_text += "\n"
+        m = len(history) - 1
+        msg_text += history[m].get('content', '')
+        #print(msg_text)
+
+        return msg_text
+
 
 
     def files_check(self, filePath=[], ):
@@ -517,30 +543,8 @@ class _ollamaAPI:
         res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )
         res_history = self.history_zip1(history=res_history, )
 
-        # 過去メッセージ追加
-        msg_text = ''
-        if (len(res_history) > 2):
-            msg_text += "''' これは過去の会話履歴です。\n"
-            for m in range(len(res_history) - 2):
-                role    = res_history[m+1].get('role','')
-                content = res_history[m+1].get('content','')
-                name    = res_history[m+1].get('name','')
-                if (role != 'system'):
-                    # 全てユーザーメッセージにて処理
-                    if (name is None) or (name == ''):
-                        msg_text += '(' + role + ')' + '\n' + content + '\n'
-                    else:
-                        if (role == 'function_call'):
-                            msg_text += '(function ' + name + ' call)'  + '\n' + content + '\n'
-                        else:
-                            msg_text += '(function ' + name + ' result) ' + '\n' + content + '\n'
-            msg_text += "''' 会話履歴はここまでです。\n"
-            msg_text += "\n"
-
-        # 送信データ
-        if (len(res_history) <= 2):
-            if (reqText is not None) and (reqText != ''):
-                msg_text += reqText + '\n'
+        # メッセージ作成
+        #msg_text = self.history2msg_text(history=res_history, )
 
         print(' history = "", ')
         msg_text = ''
@@ -548,7 +552,6 @@ class _ollamaAPI:
             msg_text += sysText + '\n'
         if (reqText is not None) and (reqText != ''):
             msg_text += reqText + '\n'
-
         msg_text += inpText
         messages = []
 
