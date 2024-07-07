@@ -122,24 +122,23 @@ class qFunc_class:
                 if (not os.path.isdir(path[:-1])):
                     os.makedirs(path[:-1])
                 else:
-                    if (remove != False):
+                    if (remove == True):
+                        try:
+                            shutil.rmtree(path, ignore_errors=True, )
+                        except Exception as e:
+                            pass
+                    elif (str(remove).isdigit()):
                         files = glob.glob(path + '*')
                         for f in files:
-                            if (remove == True):
-                                try:
+                            try:
+                                nowTime   = datetime.datetime.now()
+                                fileStamp = os.path.getmtime(f)
+                                fileTime  = datetime.datetime.fromtimestamp(fileStamp)
+                                td = nowTime - fileTime
+                                if (td.days >= int(remove)):
                                     self.remove(f)
-                                except Exception as e:
-                                    pass
-                            if (str(remove).isdigit()):
-                                try:
-                                    nowTime   = datetime.datetime.now()
-                                    fileStamp = os.path.getmtime(f)
-                                    fileTime  = datetime.datetime.fromtimestamp(fileStamp)
-                                    td = nowTime - fileTime
-                                    if (td.days >= int(remove)):
-                                        self.remove(f)
-                                except Exception as e:
-                                    pass
+                            except Exception as e:
+                                pass
 
         except Exception as e:
             pass
