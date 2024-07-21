@@ -22,11 +22,11 @@ import base64
 
 
 
-# gemini チャットボット
+# freeai チャットボット
 import google.generativeai as genai
 #import google.ai.generativelanguage as glm
 
-import speech_bot_gemini_key  as gemini_key
+import speech_bot_freeai_key as freeai_key
 
 
 
@@ -37,7 +37,7 @@ def base64_encode(file_path):
 
 
 
-class _geminiAPI:
+class _freeaiAPI:
 
     def __init__(self, ):
         self.log_queue              = None
@@ -46,34 +46,34 @@ class _geminiAPI:
         self.temperature            = 0.8
         self.timeOut                = 60
 
-        self.gemini_api_type        = 'gemini'
-        self.gemini_default_gpt     = 'auto'
-        self.gemini_default_class   = 'auto'
-        self.gemini_auto_continue   = 3
-        self.gemini_max_step        = 10
-        self.gemini_max_assistant   = 5
+        self.freeai_api_type        = 'freeai'
+        self.freeai_default_gpt     = 'auto'
+        self.freeai_default_class   = 'auto'
+        self.freeai_auto_continue   = 3
+        self.freeai_max_step        = 10
+        self.freeai_max_assistant   = 5
        
-        self.gemini_key_id          = None
+        self.freeai_key_id          = None
 
-        self.gemini_a_enable        = False
-        self.gemini_a_nick_name     = ''
-        self.gemini_a_model         = None
-        self.gemini_a_token         = 0
+        self.freeai_a_enable        = False
+        self.freeai_a_nick_name     = ''
+        self.freeai_a_model         = None
+        self.freeai_a_token         = 0
 
-        self.gemini_b_enable        = False
-        self.gemini_b_nick_name     = ''
-        self.gemini_b_model         = None
-        self.gemini_b_token         = 0
+        self.freeai_b_enable        = False
+        self.freeai_b_nick_name     = ''
+        self.freeai_b_model         = None
+        self.freeai_b_token         = 0
 
-        self.gemini_v_enable        = False
-        self.gemini_v_nick_name     = ''
-        self.gemini_v_model         = None
-        self.gemini_v_token         = 0
+        self.freeai_v_enable        = False
+        self.freeai_v_nick_name     = ''
+        self.freeai_v_model         = None
+        self.freeai_v_token         = 0
 
-        self.gemini_x_enable        = False
-        self.gemini_x_nick_name     = ''
-        self.gemini_x_model         = None
-        self.gemini_x_token         = 0
+        self.freeai_x_enable        = False
+        self.freeai_x_nick_name     = ''
+        self.freeai_x_model         = None
+        self.freeai_x_token         = 0
 
         self.history                = []
 
@@ -105,17 +105,17 @@ class _geminiAPI:
                 pass
 
     def authenticate(self, api,
-                     gemini_api_type,
-                     gemini_default_gpt, gemini_default_class,
-                     gemini_auto_continue,
-                     gemini_max_step, gemini_max_assistant,
+                     freeai_api_type,
+                     freeai_default_gpt, freeai_default_class,
+                     freeai_auto_continue,
+                     freeai_max_step, freeai_max_assistant,
 
-                     gemini_key_id,
+                     freeai_key_id,
 
-                     gemini_a_nick_name, gemini_a_model, gemini_a_token, 
-                     gemini_b_nick_name, gemini_b_model, gemini_b_token, 
-                     gemini_v_nick_name, gemini_v_model, gemini_v_token, 
-                     gemini_x_nick_name, gemini_x_model, gemini_x_token, 
+                     freeai_a_nick_name, freeai_a_model, freeai_a_token, 
+                     freeai_b_nick_name, freeai_b_model, freeai_b_token, 
+                     freeai_v_nick_name, freeai_v_model, freeai_v_token, 
+                     freeai_x_nick_name, freeai_x_model, freeai_x_token, 
                     ):
 
         # 設定
@@ -123,43 +123,43 @@ class _geminiAPI:
         # 認証
         self.bot_auth                 = None
 
-        self.gemini_default_gpt       = gemini_default_gpt
-        self.gemini_default_class     = gemini_default_class
-        if (str(gemini_auto_continue) != 'auto'):
-            self.gemini_auto_continue = int(gemini_auto_continue)
-        if (str(gemini_max_step)      != 'auto'):
-            self.gemini_max_step      = int(gemini_max_step)
-        if (str(gemini_max_assistant) != 'auto'):
-            self.gemini_max_assistant = int(gemini_max_assistant)
+        self.freeai_default_gpt       = freeai_default_gpt
+        self.freeai_default_class     = freeai_default_class
+        if (str(freeai_auto_continue) != 'auto'):
+            self.freeai_auto_continue = int(freeai_auto_continue)
+        if (str(freeai_max_step)      != 'auto'):
+            self.freeai_max_step      = int(freeai_max_step)
+        if (str(freeai_max_assistant) != 'auto'):
+            self.freeai_max_assistant = int(freeai_max_assistant)
 
-        # gemini チャットボット
-        if (gemini_a_nick_name != ''):
-            self.gemini_a_enable     = False
-            self.gemini_a_nick_name  = gemini_a_nick_name
-            self.gemini_a_model      = gemini_a_model
-            self.gemini_a_token      = int(gemini_a_token)
+        # freeai チャットボット
+        if (freeai_a_nick_name != ''):
+            self.freeai_a_enable     = False
+            self.freeai_a_nick_name  = freeai_a_nick_name
+            self.freeai_a_model      = freeai_a_model
+            self.freeai_a_token      = int(freeai_a_token)
 
-        if (gemini_b_nick_name != ''):
-            self.gemini_b_enable     = False
-            self.gemini_b_nick_name  = gemini_b_nick_name
-            self.gemini_b_model      = gemini_b_model
-            self.gemini_b_token      = int(gemini_b_token)
+        if (freeai_b_nick_name != ''):
+            self.freeai_b_enable     = False
+            self.freeai_b_nick_name  = freeai_b_nick_name
+            self.freeai_b_model      = freeai_b_model
+            self.freeai_b_token      = int(freeai_b_token)
 
-        if (gemini_v_nick_name != ''):
-            self.gemini_v_enable     = False
-            self.gemini_v_nick_name  = gemini_v_nick_name
-            self.gemini_v_model      = gemini_v_model
-            self.gemini_v_token      = int(gemini_v_token)
+        if (freeai_v_nick_name != ''):
+            self.freeai_v_enable     = False
+            self.freeai_v_nick_name  = freeai_v_nick_name
+            self.freeai_v_model      = freeai_v_model
+            self.freeai_v_token      = int(freeai_v_token)
 
-        if (gemini_x_nick_name != ''):
-            self.gemini_x_enable     = False
-            self.gemini_x_nick_name  = gemini_x_nick_name
-            self.gemini_x_model      = gemini_x_model
-            self.gemini_x_token      = int(gemini_x_token)
+        if (freeai_x_nick_name != ''):
+            self.freeai_x_enable     = False
+            self.freeai_x_nick_name  = freeai_x_nick_name
+            self.freeai_x_model      = freeai_x_model
+            self.freeai_x_token      = int(freeai_x_token)
 
         # API-KEYの設定
         try:
-            genai.configure(api_key=gemini_key_id, ) 
+            genai.configure(api_key=freeai_key_id, ) 
         except Exception as e:
             print('configure error', e)
             return False
@@ -173,29 +173,29 @@ class _geminiAPI:
                 if 'generateContent' in m.supported_generation_methods:
                     model = m.name.replace('models/', '')
                     #print(model)
-                    if (model == self.gemini_a_model):
+                    if (model == self.freeai_a_model):
                         #print(model)
-                        self.gemini_a_enable = True
+                        self.freeai_a_enable = True
                         hit = True
-                    if (model == self.gemini_b_model):
+                    if (model == self.freeai_b_model):
                         #print(model)
-                        self.gemini_b_enable = True
+                        self.freeai_b_enable = True
                         hit = True
-                    if (model == self.gemini_v_model):
+                    if (model == self.freeai_v_model):
                         #print(model)
-                        self.gemini_v_enable = True
+                        self.freeai_v_enable = True
                         hit = True
-                    if (model == self.gemini_x_model):
+                    if (model == self.freeai_x_model):
                         #print(model)
-                        self.gemini_x_enable = True
+                        self.freeai_x_enable = True
                         hit = True
         #except Exception as e:
         #    print('list_models error', e)
 
-        self.gemini_a_enable = True
-        self.gemini_b_enable = True
-        self.gemini_v_enable = True
-        self.gemini_x_enable = True
+        self.freeai_a_enable = True
+        self.freeai_b_enable = True
+        self.freeai_v_enable = True
+        self.freeai_x_enable = True
         hit = True
 
         if (hit == True):
@@ -365,16 +365,16 @@ class _geminiAPI:
         res_history     = history
 
         if (self.bot_auth is None):
-            self.print(session_id, ' Gemini  : Not Authenticate Error !')
+            self.print(session_id, ' FreeAI  : Not Authenticate Error !')
             return res_text, res_path, res_name, res_api, res_history
 
         # モデル 設定
-        res_name = self.gemini_a_nick_name
-        res_api  = self.gemini_a_model
-        if  (chat_class == 'gemini'):
-            if (self.gemini_b_enable == True):
-                res_name = self.gemini_b_nick_name
-                res_api  = self.gemini_b_model
+        res_name = self.freeai_a_nick_name
+        res_api  = self.freeai_a_model
+        if  (chat_class == 'freeai'):
+            if (self.freeai_b_enable == True):
+                res_name = self.freeai_b_nick_name
+                res_api  = self.freeai_b_model
 
         # モデル 補正 (assistant)
         if ((chat_class == 'assistant') \
@@ -384,66 +384,66 @@ class _geminiAPI:
         or  (chat_class == '複雑な会話') \
         or  (chat_class == 'アシスタント') \
         or  (model_select == 'x')):
-            if (self.gemini_x_enable == True):
-                res_name = self.gemini_x_nick_name
-                res_api  = self.gemini_x_model
+            if (self.freeai_x_enable == True):
+                res_name = self.freeai_x_nick_name
+                res_api  = self.freeai_x_model
 
         # model 指定
-        if (self.gemini_a_nick_name != ''):
-            if (inpText.strip()[:len(self.gemini_a_nick_name)+1].lower() == (self.gemini_a_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gemini_a_nick_name)+1:]
-        if (self.gemini_b_nick_name != ''):
-            if (inpText.strip()[:len(self.gemini_b_nick_name)+1].lower() == (self.gemini_b_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gemini_b_nick_name)+1:]
-                if   (self.gemini_b_enable == True):
-                        res_name = self.gemini_b_nick_name
-                        res_api  = self.gemini_b_model
-        if (self.gemini_v_nick_name != ''):
-            if (inpText.strip()[:len(self.gemini_v_nick_name)+1].lower() == (self.gemini_v_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gemini_v_nick_name)+1:]
-                if   (self.gemini_v_enable == True):
+        if (self.freeai_a_nick_name != ''):
+            if (inpText.strip()[:len(self.freeai_a_nick_name)+1].lower() == (self.freeai_a_nick_name.lower() + ',')):
+                inpText = inpText.strip()[len(self.freeai_a_nick_name)+1:]
+        if (self.freeai_b_nick_name != ''):
+            if (inpText.strip()[:len(self.freeai_b_nick_name)+1].lower() == (self.freeai_b_nick_name.lower() + ',')):
+                inpText = inpText.strip()[len(self.freeai_b_nick_name)+1:]
+                if   (self.freeai_b_enable == True):
+                        res_name = self.freeai_b_nick_name
+                        res_api  = self.freeai_b_model
+        if (self.freeai_v_nick_name != ''):
+            if (inpText.strip()[:len(self.freeai_v_nick_name)+1].lower() == (self.freeai_v_nick_name.lower() + ',')):
+                inpText = inpText.strip()[len(self.freeai_v_nick_name)+1:]
+                if   (self.freeai_v_enable == True):
                     if  (len(image_urls) > 0) \
                     and (len(image_urls) == len(upload_files)):
-                        res_name = self.gemini_v_nick_name
-                        res_api  = self.gemini_v_model
-                elif (self.gemini_x_enable == True):
-                        res_name = self.gemini_x_nick_name
-                        res_api  = self.gemini_x_model
-        if (self.gemini_x_nick_name != ''):
-            if (inpText.strip()[:len(self.gemini_x_nick_name)+1].lower() == (self.gemini_x_nick_name.lower() + ',')):
-                inpText = inpText.strip()[len(self.gemini_x_nick_name)+1:]
-                if   (self.gemini_x_enable == True):
-                        res_name = self.gemini_x_nick_name
-                        res_api  = self.gemini_x_model
-                elif (self.gemini_b_enable == True):
-                        res_name = self.gemini_b_nick_name
-                        res_api  = self.gemini_b_model
+                        res_name = self.freeai_v_nick_name
+                        res_api  = self.freeai_v_model
+                elif (self.freeai_x_enable == True):
+                        res_name = self.freeai_x_nick_name
+                        res_api  = self.freeai_x_model
+        if (self.freeai_x_nick_name != ''):
+            if (inpText.strip()[:len(self.freeai_x_nick_name)+1].lower() == (self.freeai_x_nick_name.lower() + ',')):
+                inpText = inpText.strip()[len(self.freeai_x_nick_name)+1:]
+                if   (self.freeai_x_enable == True):
+                        res_name = self.freeai_x_nick_name
+                        res_api  = self.freeai_x_model
+                elif (self.freeai_b_enable == True):
+                        res_name = self.freeai_b_nick_name
+                        res_api  = self.freeai_b_model
         if   (inpText.strip()[:5].lower() == ('riki,')):
             inpText = inpText.strip()[5:]
-            if   (self.gemini_x_enable == True):
-                        res_name = self.gemini_x_nick_name
-                        res_api  = self.gemini_x_model
-            elif (self.gemini_b_enable == True):
-                        res_name = self.gemini_b_nick_name
-                        res_api  = self.gemini_b_model
+            if   (self.freeai_x_enable == True):
+                        res_name = self.freeai_x_nick_name
+                        res_api  = self.freeai_x_model
+            elif (self.freeai_b_enable == True):
+                        res_name = self.freeai_b_nick_name
+                        res_api  = self.freeai_b_model
         elif (inpText.strip()[:7].lower() == ('vision,')):
             inpText = inpText.strip()[7:]
-            if   (self.gemini_v_enable == True):
+            if   (self.freeai_v_enable == True):
                 if  (len(image_urls) > 0) \
                 and (len(image_urls) == len(upload_files)):
-                        res_name = self.gemini_v_nick_name
-                        res_api  = self.gemini_v_model
-            elif (self.gemini_x_enable == True):
-                        res_name = self.gemini_x_nick_name
-                        res_api  = self.gemini_x_model
+                        res_name = self.freeai_v_nick_name
+                        res_api  = self.freeai_v_model
+            elif (self.freeai_x_enable == True):
+                        res_name = self.freeai_x_nick_name
+                        res_api  = self.freeai_x_model
         elif (inpText.strip()[:10].lower() == ('assistant,')):
             inpText = inpText.strip()[10:]
-            if (self.gemini_x_enable == True):
-                        res_name = self.gemini_x_nick_name
-                        res_api  = self.gemini_x_model
-            elif (self.gemini_b_enable == True):
-                        res_name = self.gemini_b_nick_name
-                        res_api  = self.gemini_b_model
+            if (self.freeai_x_enable == True):
+                        res_name = self.freeai_x_nick_name
+                        res_api  = self.freeai_x_model
+            elif (self.freeai_b_enable == True):
+                        res_name = self.freeai_b_nick_name
+                        res_api  = self.freeai_b_model
         elif (inpText.strip()[:7].lower() == ('openai,')):
             inpText = inpText.strip()[7:]
         elif (inpText.strip()[:7].lower() == ('claude,')):
@@ -456,26 +456,28 @@ class _geminiAPI:
             inpText = inpText.strip()[5:]
         elif (inpText.strip()[:6].lower() == ('local,')):
             inpText = inpText.strip()[6:]
+        elif (inpText.strip()[:5].lower() == ('free,')):
+            inpText = inpText.strip()[5:]
 
         # モデル 未設定時
         if (res_api is None):
-            res_name = self.gemini_a_nick_name
-            res_api  = self.gemini_a_model
-            if (self.gemini_b_enable == True):
+            res_name = self.freeai_a_nick_name
+            res_api  = self.freeai_a_model
+            if (self.freeai_b_enable == True):
                 if (len(upload_files) > 0) \
                 or (len(inpText) > 1000):
-                    res_name = self.gemini_b_nick_name
-                    res_api  = self.gemini_b_model
+                    res_name = self.freeai_b_nick_name
+                    res_api  = self.freeai_b_model
 
         # モデル 補正 (vision)
         if  (len(image_urls) > 0) \
         and (len(image_urls) == len(upload_files)):
-            if   (self.gemini_v_enable == True):
-                res_name = self.gemini_v_nick_name
-                res_api  = self.gemini_v_model
-            elif (self.gemini_x_enable == True):
-                res_name = self.gemini_x_nick_name
-                res_api  = self.gemini_x_model
+            if   (self.freeai_v_enable == True):
+                res_name = self.freeai_v_nick_name
+                res_api  = self.freeai_v_model
+            elif (self.freeai_x_enable == True):
+                res_name = self.freeai_x_nick_name
+                res_api  = self.freeai_x_model
 
         # history 追加・圧縮 (古いメッセージ)
         res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )
@@ -503,40 +505,46 @@ class _geminiAPI:
                             req_files.append(upload_obj)
                             break
 
-                    if (hit == False):
+                    # ***free特別処理*** 毎回送信
+                    #if (hit == False):
+                    if True:
 
                         # 送信
-                        self.print(session_id, f" Gemini  : Upload file '{ file_name }'.")
+                        self.print(session_id, f" FreeAI  : Upload file '{ file_name }'.")
                         upload_file = genai.upload_file(file_name, display_name=os.path.basename(file_name), )
                         upload_obj  = genai.get_file(upload_file.name)
 
                         # 待機
-                        self.print(session_id, f" Gemini  : Upload processing ... '{ upload_file.name }'")
+                        self.print(session_id, f" FreeAI  : Upload processing ... '{ upload_file.name }'")
                         chkTime = time.time()
                         while ((time.time() - chkTime) < 120) and (upload_file.state.name == "PROCESSING"):
                             time.sleep(5.00)
                         if (upload_file.state.name == "PROCESSING"):
-                            self.print(session_id, ' Gemini  : Upload timeout. (120s)')
+                            self.print(session_id, ' FreeAI  : Upload timeout. (120s)')
                             return res_text, res_path, res_name, res_api, res_history
 
                         # 完了
-                        self.print(session_id, ' Gemini  : Upload complete.')
+                        self.print(session_id, ' FreeAI  : Upload complete.')
                         req_files.append(upload_obj)
 
-        # tools
-        #tools = []
-        tools = [{"name":'code_execution'}]
-        #tools = ['code_execution']
-        for module_dic in function_modules:
-            func_dic = module_dic['function']
-            func_str = json.dumps(func_dic, ensure_ascii=False, )
-            func_str = func_str.replace('"type"', '"type_"')
-            func_str = func_str.replace('"object"', '"OBJECT"')
-            func_str = func_str.replace('"string"', '"STRING"')
-            func     = json.loads(func_str)
-            tools.append(func)
+        # ***free特別処理*** tools未対応
+        tools = []
+        if False:
 
-        # gemini 設定
+            # tools
+            #tools = []
+            tools = [{"name":'code_execution'}]
+            #tools = ['code_execution']
+            for module_dic in function_modules:
+                func_dic = module_dic['function']
+                func_str = json.dumps(func_dic, ensure_ascii=False, )
+                func_str = func_str.replace('"type"', '"type_"')
+                func_str = func_str.replace('"object"', '"OBJECT"')
+                func_str = func_str.replace('"string"', '"STRING"')
+                func     = json.loads(func_str)
+                tools.append(func)
+
+        # freeai 設定
         if (jsonMode != True):
             generation_config_normal = {
                 "temperature": temperature,
@@ -545,7 +553,7 @@ class _geminiAPI:
                 "max_output_tokens": 8192,
                 "response_mime_type": "text/plain",
             }
-            gemini = genai.GenerativeModel(
+            freeai = genai.GenerativeModel(
                             model_name=res_api,
                             generation_config=generation_config_normal,
                             system_instruction=sysText, tools=tools, )
@@ -557,7 +565,7 @@ class _geminiAPI:
                 "max_output_tokens": 8192,
                 "response_mime_type": "application/json",
             }
-            gemini = genai.GenerativeModel( 
+            freeai = genai.GenerativeModel( 
                             model_name=res_api,
                             generation_config=generation_config_json,
                             system_instruction=sysText, tools=tools, )
@@ -565,23 +573,29 @@ class _geminiAPI:
         # # ファイル削除
         # files = genai.list_files()
         # for f in files:
-        #    self.print(session_id, f" Gemini  : Delete file { f.name }.")
+        #    self.print(session_id, f" FreeAI  : Delete file { f.name }.")
         #    genai.delete_file(f.name)
 
         request = []
         request.append(msg_text)
         request = list(req_files + request)
 
-        # gemini
-        #chat = gemini.start_chat(history=history, )
-        chat = gemini.start_chat(history=[], )
+        # freeai
+        #chat = freeai.start_chat(history=history, )
+        chat = freeai.start_chat(history=[], )
 
         # ストリーム実行?
         if (session_id == 'admin'):
             stream = True
         else:
             stream = False
-        print('stream = False, ')
+        #print('stream = False, ')
+        #stream = False
+
+        # ***free特別処理***
+        res_name = self.freeai_a_nick_name
+        res_api  = self.freeai_a_model
+        #print('stream = False, ')
         stream = False
 
         # 実行ループ
@@ -599,7 +613,7 @@ class _geminiAPI:
 
                 # GPT
                 n += 1
-                self.print(session_id, f" Gemini  : { res_api }, pass={ n }, ")
+                self.print(session_id, f" FreeAI  : { res_api }, pass={ n }, ")
 
                 # 結果
                 content_text  = ''
@@ -695,8 +709,8 @@ class _geminiAPI:
                         for module_dic in function_modules:
                             if (f_name == module_dic['func_name']):
                                 hit = True
-                                self.print(session_id, f" Gemini  :   function_call '{ module_dic['script'] }' ({ f_name })")
-                                self.print(session_id, f" Gemini  :   → { f_kwargs }")
+                                self.print(session_id, f" FreeAI  :   function_call '{ module_dic['script'] }' ({ f_name })")
+                                self.print(session_id, f" FreeAI  :   → { f_kwargs }")
 
                                 # メッセージ追加格納
                                 self.seq += 1
@@ -715,7 +729,7 @@ class _geminiAPI:
                                     res_json = json.dumps(dic, ensure_ascii=False, )
 
                                 # tool_result
-                                self.print(session_id, f" Gemini  :   → { res_json }")
+                                self.print(session_id, f" FreeAI  :   → { res_json }")
                                 self.print(session_id, )
 
                                 # メッセージ追加格納
@@ -754,14 +768,14 @@ class _geminiAPI:
 
                         if (hit == False):
                             print(tc, )
-                            self.print(session_id, f" Gemini  :   function_call Error ! ({ f_name })")
+                            self.print(session_id, f" FreeAI  :   function_call Error ! ({ f_name })")
                             print(res_role, res_content, f_name, f_kwargs, )
                             break
                 
                 # GPT 会話終了
                 elif (res_role == 'assistant') and (res_content != ''):
                     function_name   = 'exit'
-                    self.print(session_id, f" Gemini  : { res_name.lower() } complite.")
+                    self.print(session_id, f" FreeAI  : { res_name.lower() } complite.")
 
             # 正常回答
             if (res_content != ''):
@@ -770,7 +784,7 @@ class _geminiAPI:
 
             # 異常回答
             else:
-                self.print(session_id, ' Gemini  : Error !')
+                self.print(session_id, ' FreeAI  : Error !')
 
             # History 追加格納
             if (res_text.strip() != ''):
@@ -783,7 +797,7 @@ class _geminiAPI:
             # # ファイル削除
             # files = genai.list_files()
             # for f in files:
-            #    self.print(session_id, f" Gemini  : Delete file { f.name }.")
+            #    self.print(session_id, f" FreeAI  : Delete file { f.name }.")
             #    genai.delete_file(f.name)
 
         #except Exception as e:
@@ -808,11 +822,11 @@ class _geminiAPI:
         model_name  = None
         res_history = history
 
-        if (sysText is None):
+        if (sysText is None) or (sysText == ''):
             sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
 
         if (self.bot_auth is None):
-            self.print(session_id, ' Gemini : Not Authenticate Error !')
+            self.print(session_id, ' FreeAI : Not Authenticate Error !')
             return res_text, res_path, nick_name, model_name, res_history
 
         # ファイル分離
@@ -827,7 +841,7 @@ class _geminiAPI:
         #nick_name  = 'auto'
         #model_name = 'auto'
 
-        # gemini
+        # freeai
         res_text, res_path, res_files, nick_name, model_name, res_history = \
         self.run_gpt(   chat_class=chat_class, model_select=model_select,
                         nick_name=nick_name, model_name=model_name,
@@ -836,12 +850,14 @@ class _geminiAPI:
                         upload_files=upload_files, image_urls=image_urls,
                         temperature=temperature, max_step=max_step, )
 
-        # 文書成形
-        text = self.text_replace(text=res_text, )
-        if (text.strip() != ''):
-            res_text = text
-        else:
-            res_text = '!'
+        # ***free特別処理*** 実行不要
+        if False:
+            # 文書成形
+            text = self.text_replace(text=res_text, )
+            if (text.strip() != ''):
+                res_text = text
+            else:
+                res_text = '!'
 
         return res_text, res_path, res_files, nick_name, model_name, res_history
 
@@ -849,25 +865,25 @@ class _geminiAPI:
 
 if __name__ == '__main__':
 
-        #geminiAPI = speech_bot_gemini.ChatBotAPI()
-        geminiAPI = _geminiAPI()
+        #freeaiAPI = speech_bot_freeai.ChatBotAPI()
+        freeaiAPI = _freeaiAPI()
 
-        api_type = gemini_key.getkey('gemini','gemini_api_type')
+        api_type = freeai_key.getkey('freeai','freeai_api_type')
         print(api_type)
 
         log_queue = queue.Queue()
-        res = geminiAPI.init(log_queue=log_queue, )
+        res = freeaiAPI.init(log_queue=log_queue, )
 
-        res = geminiAPI.authenticate('gemini',
+        res = freeaiAPI.authenticate('freeai',
                             api_type,
-                            gemini_key.getkey('gemini','gemini_default_gpt'), gemini_key.getkey('gemini','gemini_default_class'),
-                            gemini_key.getkey('gemini','gemini_auto_continue'),
-                            gemini_key.getkey('gemini','gemini_max_step'), gemini_key.getkey('gemini','gemini_max_assistant'),
-                            gemini_key.getkey('gemini','gemini_key_id'),
-                            gemini_key.getkey('gemini','gemini_a_nick_name'), gemini_key.getkey('gemini','gemini_a_model'), gemini_key.getkey('gemini','gemini_a_token'),
-                            gemini_key.getkey('gemini','gemini_b_nick_name'), gemini_key.getkey('gemini','gemini_b_model'), gemini_key.getkey('gemini','gemini_b_token'),
-                            gemini_key.getkey('gemini','gemini_v_nick_name'), gemini_key.getkey('gemini','gemini_v_model'), gemini_key.getkey('gemini','gemini_v_token'),
-                            gemini_key.getkey('gemini','gemini_x_nick_name'), gemini_key.getkey('gemini','gemini_x_model'), gemini_key.getkey('gemini','gemini_x_token'),
+                            freeai_key.getkey('freeai','freeai_default_gpt'), freeai_key.getkey('freeai','freeai_default_class'),
+                            freeai_key.getkey('freeai','freeai_auto_continue'),
+                            freeai_key.getkey('freeai','freeai_max_step'), freeai_key.getkey('freeai','freeai_max_assistant'),
+                            freeai_key.getkey('freeai','freeai_key_id'),
+                            freeai_key.getkey('freeai','freeai_a_nick_name'), freeai_key.getkey('freeai','freeai_a_model'), freeai_key.getkey('freeai','freeai_a_token'),
+                            freeai_key.getkey('freeai','freeai_b_nick_name'), freeai_key.getkey('freeai','freeai_b_model'), freeai_key.getkey('freeai','freeai_b_token'),
+                            freeai_key.getkey('freeai','freeai_v_nick_name'), freeai_key.getkey('freeai','freeai_v_model'), freeai_key.getkey('freeai','freeai_v_token'),
+                            freeai_key.getkey('freeai','freeai_x_nick_name'), freeai_key.getkey('freeai','freeai_x_model'), freeai_key.getkey('freeai','freeai_x_token'),
                             )
         print('authenticate:', res, )
         if (res == True):
@@ -875,7 +891,7 @@ if __name__ == '__main__':
             function_modules = []
             filePath         = []
 
-            if True:
+            if False:
                 import    speech_bot_function
                 botFunc = speech_bot_function.botFunction()
 
@@ -889,38 +905,18 @@ if __name__ == '__main__':
                     if (module_dic['onoff'] == 'on'):
                         function_modules.append(module_dic)
 
-            if False:
-                sysText = None
-                reqText = ''
-                #inpText = 'flash,おはようございます。'
-                inpText = 'flash,兵庫県三木市の天気？'
-                print()
-                print('[Request]')
-                print(reqText, inpText )
-                print()
-                res_text, res_path, res_files, res_name, res_api, geminiAPI.history = \
-                    geminiAPI.chatBot(  chat_class='auto', model_select='auto', 
-                                        session_id='guest1', history=geminiAPI.history, function_modules=function_modules,
-                                        sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
-                                        inpLang='ja', outLang='ja', )
-                print()
-                print(f"[{ res_name }] ({ res_api })")
-                print(str(res_text))
-                print()
-
             if True:
                 sysText = None
                 reqText = ''
-                #inpText = '兵庫県三木市の天気？'
-                #inpText = 'pythonで円周率100桁算出、実行して'
-                inpText = 'flash,pythonで100/3を表示するプログラム生成して、実行して'
+                inpText = 'free,おはようございます。'
+                #inpText = 'f-flash,兵庫県三木市の天気？'
                 print()
                 print('[Request]')
                 print(reqText, inpText )
                 print()
-                res_text, res_path, res_files, res_name, res_api, geminiAPI.history = \
-                    geminiAPI.chatBot(  chat_class='auto', model_select='auto', 
-                                        session_id='admin', history=geminiAPI.history, function_modules=function_modules,
+                res_text, res_path, res_files, res_name, res_api, freeaiAPI.history = \
+                    freeaiAPI.chatBot(  chat_class='auto', model_select='auto', 
+                                        session_id='admin', history=freeaiAPI.history, function_modules=function_modules,
                                         sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
                                         inpLang='ja', outLang='ja', )
                 print()
@@ -931,33 +927,15 @@ if __name__ == '__main__':
             if False:
                 sysText = None
                 reqText = ''
-                inpText = 'この画像はなんだと思いますか？'
+                inpText = 'free,この画像はなんだと思いますか？'
                 filePath = ['_icons/dog.jpg', '_icons/kyoto.png']
                 print()
                 print('[Request]')
                 print(reqText, inpText )
                 print()
-                res_text, res_path, res_files, res_name, res_api, geminiAPI.history = \
-                    geminiAPI.chatBot(  chat_class='auto', model_select='auto', 
-                                        session_id='admin', history=geminiAPI.history, function_modules=function_modules,
-                                        sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
-                                        inpLang='ja', outLang='ja', )
-                print()
-                print(f"[{ res_name }] ({ res_api })")
-                print(str(res_text))
-                print()
-
-            if False:
-                sysText = None
-                reqText = ''
-                inpText = "genarate 'cute cat in room' image"
-                print()
-                print('[Request]')
-                print(reqText, inpText )
-                print()
-                res_text, res_path, res_files, res_name, res_api, geminiAPI.history = \
-                    geminiAPI.chatBot(  chat_class='flash', model_select='auto', 
-                                        session_id='admin', history=geminiAPI.history, function_modules=[],
+                res_text, res_path, res_files, res_name, res_api, freeaiAPI.history = \
+                    freeaiAPI.chatBot(  chat_class='auto', model_select='auto', 
+                                        session_id='admin', history=freeaiAPI.history, function_modules=function_modules,
                                         sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
                                         inpLang='ja', outLang='ja', )
                 print()
@@ -967,9 +945,9 @@ if __name__ == '__main__':
 
             if False:
                 print('[History]')
-                for h in range(len(geminiAPI.history)):
-                    print(geminiAPI.history[h])
-                geminiAPI.history = []
+                for h in range(len(freeaiAPI.history)):
+                    print(freeaiAPI.history[h])
+                freeaiAPI.history = []
 
 
 

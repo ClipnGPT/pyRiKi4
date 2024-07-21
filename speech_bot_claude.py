@@ -211,6 +211,7 @@ class _claudeAPI:
         text = text.replace('!\n」','!」')
         text = text.replace('!\n"' ,'!"')
         text = text.replace("!\n'" ,"!'")
+        text = text.replace("!\n=" ,"!=")
 
         text = text.replace('\n \n ' ,'\n')
         text = text.replace('\n \n' ,'\n')
@@ -526,8 +527,8 @@ class _claudeAPI:
 
                     chkTime = time.time()
                     with self.client.messages.stream(   model=res_api, 
-                                                        max_tokens=1000,
-                                                        temperature=0,
+                                                        max_tokens=4096,
+                                                        temperature=temperature,
                                                         system=sysText,
                                                         messages=messages,
                                                         tools=tools, ) as streams:
@@ -575,8 +576,8 @@ class _claudeAPI:
                 # 通常実行
                 if (stream == False):
                     response = self.client.messages.create( model=res_api, 
-                                                            max_tokens=1000,
-                                                            temperature=0,
+                                                            max_tokens=4096,
+                                                            temperature=temperature,
                                                             system=sysText,
                                                             messages=messages,
                                                             tools=tools, )
