@@ -443,6 +443,8 @@ class _perplexityAPI:
             inpText = inpText.strip()[5:]
         elif (inpText.strip()[:6].lower() == ('local,')):
             inpText = inpText.strip()[6:]
+        elif (inpText.strip()[:5].lower() == ('free,')):
+            inpText = inpText.strip()[5:]
 
         # モデル 未設定時
         if (res_api is None):
@@ -577,7 +579,7 @@ class _perplexityAPI:
         model_name  = None
         res_history = history
 
-        if (sysText is None):
+        if (sysText is None) or (sysText == ''):
             sysText = 'あなたは教師のように話す賢いアシスタントです。'
 
         if (self.bot_auth is None):

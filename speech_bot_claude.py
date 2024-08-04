@@ -383,17 +383,24 @@ class _claudeAPI:
                 if   (self.claude_b_enable == True):
                         res_name = self.claude_b_nick_name
                         res_api  = self.claude_b_model
+
         if (self.claude_v_nick_name != ''):
             if (inpText.strip()[:len(self.claude_v_nick_name)+1].lower() == (self.claude_v_nick_name.lower() + ',')):
                 inpText = inpText.strip()[len(self.claude_v_nick_name)+1:]
+                #if   (self.claude_v_enable == True):
+                #    if  (len(image_urls) > 0) \
+                #    and (len(image_urls) == len(upload_files)):
+                #        res_name = self.claude_v_nick_name
+                #        res_api  = self.claude_v_model
+                #elif (self.claude_x_enable == True):
+                #        res_name = self.claude_x_nick_name
+                #        res_api  = self.claude_x_model
+                # 2024/08/04 特別補正 ちなみに 3.5はsonnet,opusしかない！ 
                 if   (self.claude_v_enable == True):
-                    if  (len(image_urls) > 0) \
-                    and (len(image_urls) == len(upload_files)):
-                        res_name = self.claude_v_nick_name
-                        res_api  = self.claude_v_model
-                elif (self.claude_x_enable == True):
-                        res_name = self.claude_x_nick_name
-                        res_api  = self.claude_x_model
+                    res_name = self.claude_v_nick_name
+                    res_api  = self.claude_v_model
+                    print('Cloudeが選択されましたがAPI利用不可のためconfigでsonnet利用に変更中！')
+
         if (self.claude_x_nick_name != ''):
             if (inpText.strip()[:len(self.claude_x_nick_name)+1].lower() == (self.claude_x_nick_name.lower() + ',')):
                 inpText = inpText.strip()[len(self.claude_x_nick_name)+1:]
@@ -423,9 +430,9 @@ class _claudeAPI:
                         res_api  = self.claude_x_model
         elif (inpText.strip()[:10].lower() == ('assistant,')):
             inpText = inpText.strip()[10:]
-            if (self.claude_b_enable == True):
-                        res_name = self.claude_b_nick_name
-                        res_api  = self.claude_b_model
+            if (self.claude_x_enable == True):
+                        res_name = self.claude_x_nick_name
+                        res_api  = self.claude_x_model
         elif (inpText.strip()[:7].lower() == ('openai,')):
             inpText = inpText.strip()[7:]
         elif (inpText.strip()[:7].lower() == ('claude,')):
@@ -438,6 +445,8 @@ class _claudeAPI:
             inpText = inpText.strip()[5:]
         elif (inpText.strip()[:6].lower() == ('local,')):
             inpText = inpText.strip()[6:]
+        elif (inpText.strip()[:5].lower() == ('free,')):
+            inpText = inpText.strip()[5:]
 
         # モデル 未設定時
         if (res_api is None):
@@ -713,7 +722,7 @@ class _claudeAPI:
         model_name  = None
         res_history = history
 
-        if (sysText is None):
+        if (sysText is None) or (sysText == ''):
             sysText = 'あなたは教師のように話す賢いアシスタントです。'
 
         if (self.bot_auth is None):
@@ -798,8 +807,9 @@ if __name__ == '__main__':
                 sysText = None
                 reqText = ''
                 #inpText = 'おはようございます。'
-                inpText = '今日は、何月何日？'
+                #inpText = '今日は、何月何日？'
                 #inpText = '日本の３大都市の天気？'
+                inpText = 'claude,おはようございます。'
                 print()
                 print('[Request]')
                 print(reqText, inpText )
@@ -832,7 +842,7 @@ if __name__ == '__main__':
                 print(str(res_text))
                 print()
 
-            if True:
+            if False:
                 sysText = None
                 reqText = ''
                 inpText = 'この画像はなんだと思いますか？'

@@ -44,7 +44,7 @@ class _freeaiAPI:
         self.bot_auth               = None
 
         self.temperature            = 0.8
-        self.timeOut                = 60
+        self.timeOut                = 120
 
         self.freeai_api_type        = 'freeai'
         self.freeai_default_gpt     = 'auto'
@@ -204,7 +204,7 @@ class _freeaiAPI:
         else:
             return False
 
-    def setTimeOut(self, timeOut=60, ):
+    def setTimeOut(self, timeOut=120, ):
         self.timeOut = timeOut
 
     def text_replace(self, text='', ):

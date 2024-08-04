@@ -456,6 +456,8 @@ class _geminiAPI:
             inpText = inpText.strip()[5:]
         elif (inpText.strip()[:6].lower() == ('local,')):
             inpText = inpText.strip()[6:]
+        elif (inpText.strip()[:5].lower() == ('free,')):
+            inpText = inpText.strip()[5:]
 
         # モデル 未設定時
         if (res_api is None):
@@ -581,8 +583,8 @@ class _geminiAPI:
             stream = True
         else:
             stream = False
-        print('stream = False, ')
-        stream = False
+        #print('stream = False, ')
+        #stream = False
 
         # 実行ループ
         #try:
@@ -808,7 +810,7 @@ class _geminiAPI:
         model_name  = None
         res_history = history
 
-        if (sysText is None):
+        if (sysText is None) or (sysText == ''):
             sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
 
         if (self.bot_auth is None):
@@ -889,18 +891,18 @@ if __name__ == '__main__':
                     if (module_dic['onoff'] == 'on'):
                         function_modules.append(module_dic)
 
-            if False:
+            if True:
                 sysText = None
                 reqText = ''
                 #inpText = 'flash,おはようございます。'
-                inpText = 'flash,兵庫県三木市の天気？'
+                inpText = 'gemini,兵庫県三木市の天気？'
                 print()
                 print('[Request]')
                 print(reqText, inpText )
                 print()
                 res_text, res_path, res_files, res_name, res_api, geminiAPI.history = \
                     geminiAPI.chatBot(  chat_class='auto', model_select='auto', 
-                                        session_id='guest1', history=geminiAPI.history, function_modules=function_modules,
+                                        session_id='guest', history=geminiAPI.history, function_modules=function_modules,
                                         sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
                                         inpLang='ja', outLang='ja', )
                 print()
@@ -928,7 +930,7 @@ if __name__ == '__main__':
                 print(str(res_text))
                 print()
 
-            if False:
+            if True:
                 sysText = None
                 reqText = ''
                 inpText = 'この画像はなんだと思いますか？'
