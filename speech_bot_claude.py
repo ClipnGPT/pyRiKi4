@@ -121,6 +121,7 @@ class _claudeAPI:
 
         # 認証
         self.bot_auth                 = None
+        self.claude_key_id            = claude_key_id
 
         self.claude_default_gpt       = claude_default_gpt
         self.claude_default_class     = claude_default_class

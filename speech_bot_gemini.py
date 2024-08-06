@@ -122,6 +122,7 @@ class _geminiAPI:
 
         # 認証
         self.bot_auth                 = None
+        self.gemini_key_id            = gemini_key_id
 
         self.gemini_default_gpt       = gemini_default_gpt
         self.gemini_default_class     = gemini_default_class

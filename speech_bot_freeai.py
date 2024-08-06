@@ -122,6 +122,7 @@ class _freeaiAPI:
 
         # 認証
         self.bot_auth                 = None
+        self.freeai_key_id            = freeai_key_id
 
         self.freeai_default_gpt       = freeai_default_gpt
         self.freeai_default_class     = freeai_default_class

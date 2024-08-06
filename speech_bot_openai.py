@@ -506,6 +506,7 @@ class ChatBotAPI:
 
         # openai チャットボット
         if (api == 'chatgpt'):
+            self.openai_key_id      = openai_key_id
 
             self.gpt_a_enable       = False
             #self.gpt_a_nick_name    = gpt_a_nick_name
@@ -595,8 +596,10 @@ class ChatBotAPI:
 
                 except Exception as e:
                     print(e)
+                    return False
 
             if (openai_api_type == 'azure'):
+                self.azure_key_id      = azure_key_id
                 try:
                     self.openai_api_type = openai_api_type
                     self.client_ab = openai.AzureOpenAI(
@@ -616,6 +619,7 @@ class ChatBotAPI:
                     )
                 except Exception as e:
                     print(e)
+                    return False
 
                 self.azure_endpoint     = azure_endpoint
                 self.azure_version      = azure_version

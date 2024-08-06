@@ -119,6 +119,7 @@ class _perplexityAPI:
 
         # 認証
         self.bot_auth                       = None
+        self.perplexity_key_id              = perplexity_key_id
 
         self.perplexity_default_gpt         = perplexity_default_gpt
         self.perplexity_default_class       = perplexity_default_class
