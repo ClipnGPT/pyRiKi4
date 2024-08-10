@@ -381,7 +381,7 @@ class ChatBotAPI:
         self.thread_id              = {}
 
         self.temperature            = 0.8
-        self.timeOut                = 60
+        self.timeOut                = 120
         
         self.openai_api_type        = None
         self.openai_default_gpt     = None
@@ -506,7 +506,6 @@ class ChatBotAPI:
 
         # openai チャットボット
         if (api == 'chatgpt'):
-            self.openai_key_id      = openai_key_id
 
             self.gpt_a_enable       = False
             #self.gpt_a_nick_name    = gpt_a_nick_name
@@ -541,6 +540,9 @@ class ChatBotAPI:
             self.gpt_x_token2       = int(gpt_x_token2)
 
             if (openai_api_type == 'openai'):
+                self.openai_key_id  = openai_key_id
+                if (openai_key_id[:1] == '<'):
+                    return False
                 try:
                     self.openai_api_type = openai_api_type
                     self.client_ab = openai.OpenAI(
@@ -599,7 +601,9 @@ class ChatBotAPI:
                     return False
 
             if (openai_api_type == 'azure'):
-                self.azure_key_id      = azure_key_id
+                self.azure_key_id = azure_key_id
+                if (azure_key_id[:1] == '<'):
+                    return False
                 try:
                     self.openai_api_type = openai_api_type
                     self.client_ab = openai.AzureOpenAI(
@@ -677,6 +681,7 @@ class ChatBotAPI:
         text = text.replace('!\n"' ,'!"')
         text = text.replace("!\n'" ,"!'")
         text = text.replace("!\n=" ,"!=")
+        text = text.replace("!\n--" ,"!--")
 
         text = text.replace('\n \n ' ,'\n')
         text = text.replace('\n \n' ,'\n')
@@ -1145,7 +1150,7 @@ class ChatBotAPI:
                         completions = self.client_v.chat.completions.create(
                                 model           = res_api,
                                 messages        = msg,
-                                max_tokens      = 4000,
+                                # max_tokens      = 4000,
                                 timeout         = self.timeOut, 
                                 stream          = stream, 
                                 )
@@ -1193,7 +1198,7 @@ class ChatBotAPI:
                         completions = self.client_v.chat.completions.create(
                                 model           = res_api,
                                 messages        = msg,
-                                max_tokens      = 4000,
+                                # max_tokens      = 4000,
                                 timeout         = self.timeOut,
                                 )
 

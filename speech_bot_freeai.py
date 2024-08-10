@@ -159,6 +159,8 @@ class _freeaiAPI:
             self.freeai_x_token      = int(freeai_x_token)
 
         # API-KEYの設定
+        if (freeai_key_id[:1] == '<'):
+            return False
         try:
             genai.configure(api_key=freeai_key_id, ) 
         except Exception as e:
@@ -229,6 +231,7 @@ class _freeaiAPI:
         text = text.replace('!\n"' ,'!"')
         text = text.replace("!\n'" ,"!'")
         text = text.replace("!\n=" ,"!=")
+        text = text.replace("!\n--" ,"!--")
 
         text = text.replace('\n \n ' ,'\n')
         text = text.replace('\n \n' ,'\n')
@@ -530,7 +533,7 @@ class _freeaiAPI:
 
         # ***free特別処理*** tools未対応
         tools = []
-        if False:
+        if True:
 
             # tools
             #tools = []
@@ -594,8 +597,8 @@ class _freeaiAPI:
         #stream = False
 
         # ***free特別処理***
-        res_name = self.freeai_a_nick_name
-        res_api  = self.freeai_a_model
+        #res_name = self.freeai_a_nick_name
+        #res_api  = self.freeai_a_model
         #print('stream = False, ')
         stream = False
 
@@ -892,7 +895,7 @@ if __name__ == '__main__':
             function_modules = []
             filePath         = []
 
-            if False:
+            if True:
                 import    speech_bot_function
                 botFunc = speech_bot_function.botFunction()
 
@@ -909,7 +912,7 @@ if __name__ == '__main__':
             if True:
                 sysText = None
                 reqText = ''
-                inpText = 'free,おはようございます。'
+                inpText = 'おはようございます。'
                 #inpText = 'f-flash,兵庫県三木市の天気？'
                 print()
                 print('[Request]')
@@ -925,10 +928,28 @@ if __name__ == '__main__':
                 print(str(res_text))
                 print()
 
-            if False:
+            if True:
                 sysText = None
                 reqText = ''
-                inpText = 'free,この画像はなんだと思いますか？'
+                inpText = '兵庫県三木市の天気？'
+                print()
+                print('[Request]')
+                print(reqText, inpText )
+                print()
+                res_text, res_path, res_files, res_name, res_api, freeaiAPI.history = \
+                    freeaiAPI.chatBot(  chat_class='auto', model_select='auto', 
+                                        session_id='admin', history=freeaiAPI.history, function_modules=function_modules,
+                                        sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
+                                        inpLang='ja', outLang='ja', )
+                print()
+                print(f"[{ res_name }] ({ res_api })")
+                print(str(res_text))
+                print()
+
+            if True:
+                sysText = None
+                reqText = ''
+                inpText = 'この画像はなんだと思いますか？'
                 filePath = ['_icons/dog.jpg', '_icons/kyoto.png']
                 print()
                 print('[Request]')

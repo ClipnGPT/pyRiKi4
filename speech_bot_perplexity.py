@@ -157,6 +157,8 @@ class _perplexityAPI:
 
         # API-KEYの設定
         self.client = None
+        if (perplexity_key_id[:1] == '<'):
+            return False
         try:
             self.client = openai.OpenAI(
                 api_key=perplexity_key_id,
@@ -211,6 +213,7 @@ class _perplexityAPI:
         text = text.replace('!\n"' ,'!"')
         text = text.replace("!\n'" ,"!'")
         text = text.replace("!\n=" ,"!=")
+        text = text.replace("!\n--" ,"!--")
 
         text = text.replace('\n \n ' ,'\n')
         text = text.replace('\n \n' ,'\n')

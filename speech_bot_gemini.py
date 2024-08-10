@@ -159,6 +159,8 @@ class _geminiAPI:
             self.gemini_x_token      = int(gemini_x_token)
 
         # API-KEYの設定
+        if (gemini_key_id[:1] == '<'):
+            return False
         try:
             genai.configure(api_key=gemini_key_id, ) 
         except Exception as e:
@@ -229,6 +231,7 @@ class _geminiAPI:
         text = text.replace('!\n"' ,'!"')
         text = text.replace("!\n'" ,"!'")
         text = text.replace("!\n=" ,"!=")
+        text = text.replace("!\n--" ,"!--")
 
         text = text.replace('\n \n ' ,'\n')
         text = text.replace('\n \n' ,'\n')

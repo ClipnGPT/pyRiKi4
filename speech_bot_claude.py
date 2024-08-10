@@ -159,6 +159,8 @@ class _claudeAPI:
 
         # API-KEYの設定
         self.client = None
+        if (claude_key_id[:1] == '<'):
+            return False
         try:
             self.client = anthropic.Anthropic(
                 # defaults to os.environ.get("ANTHROPIC_API_KEY")
@@ -213,6 +215,7 @@ class _claudeAPI:
         text = text.replace('!\n"' ,'!"')
         text = text.replace("!\n'" ,"!'")
         text = text.replace("!\n=" ,"!=")
+        text = text.replace("!\n--" ,"!--")
 
         text = text.replace('\n \n ' ,'\n')
         text = text.replace('\n \n' ,'\n')
