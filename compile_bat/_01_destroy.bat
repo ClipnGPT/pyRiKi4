@@ -31,11 +31,7 @@ ECHO -------
     python -m pip  install --upgrade screeninfo
     python -m pip  install --upgrade pyautogui
     python -m pip  install --upgrade pywin32
-<<<<<<< HEAD
     python -m pip  install --upgrade comtypes
-=======
-    python -m pip  install --upgrade comtypes==1.4.4
->>>>>>> 102678d987f07a6de45100eaa41d81e0885b2b17
     python -m pip  install --upgrade psutil
     python -m pip  install --upgrade rainbow-logging-handler
     python -m pip  install --upgrade pycryptodome
