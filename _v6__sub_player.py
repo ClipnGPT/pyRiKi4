@@ -28,6 +28,11 @@ import random
 import numpy as np
 import cv2
 
+# dummy import
+if (os.name == 'nt'):
+    import comtypes.client
+    import comtypes.stream
+
 #print(os.path.dirname(__file__))
 #print(os.path.basename(__file__))
 #print(sys.version_info)

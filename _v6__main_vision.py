@@ -27,6 +27,11 @@ import cv2
 import platform
 qPLATFORM = platform.system().lower() #windows,darwin,linux
 
+# dummy import
+if (os.name == 'nt'):
+    import comtypes.client
+    import comtypes.stream
+
 #print(os.path.dirname(__file__))
 #print(os.path.basename(__file__))
 #print(sys.version_info)

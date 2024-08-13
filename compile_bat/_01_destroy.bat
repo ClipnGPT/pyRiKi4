@@ -8,13 +8,11 @@ REM ------------------------------------------------
 
 cd ".."
 
-ECHO;
+ECHO; ÉèÅ[ÉNçÌèú
 IF EXIST "build"        RD "build"        /s /q
 IF EXIST "dist"         RD "dist"         /s /q
 IF EXIST "__pycache__"  RD "__pycache__"  /s /q
 PAUSE
-
-
 
 ECHO;
 ECHO -----
@@ -33,6 +31,7 @@ ECHO -------
     python -m pip  install --upgrade screeninfo
     python -m pip  install --upgrade pyautogui
     python -m pip  install --upgrade pywin32
+    python -m pip  install --upgrade comtypes
     python -m pip  install --upgrade psutil
     python -m pip  install --upgrade rainbow-logging-handler
     python -m pip  install --upgrade pycryptodome

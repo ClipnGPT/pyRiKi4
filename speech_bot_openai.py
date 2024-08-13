@@ -16,17 +16,13 @@ import datetime
 import codecs
 import shutil
 
-import glob
-import base64
-
 import json
+import queue
+import base64
+import glob
 
 import socket
-
-from openai.types.beta.threads import Message
 qHOSTNAME = socket.gethostname().lower()
-
-import queue
 
 
 
@@ -36,10 +32,11 @@ import openai
 from typing_extensions import override
 from openai import AssistantEventHandler
 from openai.types.beta import AssistantStreamEvent
-#from openai.types.beta.threads import Text, TextDelta, Message, MessageDelta
+#from openai.types.beta.threads import Message
 from openai.types.beta.threads.runs import ToolCall, ToolCallDelta, RunStep
 
 import tiktoken
+
 import speech_bot_openai_key  as openai_key
 
 
@@ -47,7 +44,6 @@ import speech_bot_openai_key  as openai_key
 qPath_temp           = 'temp/'
 qPath_output         = 'temp/output/'
 qPath_chat_work      = 'temp/chat_work/'
-qPath_retrieval_work = 'temp/chat_retrieval_work/'
 
 
 
@@ -385,7 +381,7 @@ class ChatBotAPI:
         self.thread_id              = {}
 
         self.temperature            = 0.8
-        self.timeOut                = 60
+        self.timeOut                = 120
         
         self.openai_api_type        = None
         self.openai_default_gpt     = None
@@ -488,8 +484,6 @@ class ChatBotAPI:
             os.mkdir(qPath_output)
         if (not os.path.isdir(qPath_chat_work)):
             os.mkdir(qPath_chat_work)
-        if (not os.path.isdir(qPath_retrieval_work)):
-            os.mkdir(qPath_retrieval_work)
 
         # 認証
         self.bot_auth               = None
@@ -546,6 +540,9 @@ class ChatBotAPI:
             self.gpt_x_token2       = int(gpt_x_token2)
 
             if (openai_api_type == 'openai'):
+                self.openai_key_id  = openai_key_id
+                if (openai_key_id[:1] == '<'):
+                    return False
                 try:
                     self.openai_api_type = openai_api_type
                     self.client_ab = openai.OpenAI(
@@ -601,8 +598,12 @@ class ChatBotAPI:
 
                 except Exception as e:
                     print(e)
+                    return False
 
             if (openai_api_type == 'azure'):
+                self.azure_key_id = azure_key_id
+                if (azure_key_id[:1] == '<'):
+                    return False
                 try:
                     self.openai_api_type = openai_api_type
                     self.client_ab = openai.AzureOpenAI(
@@ -622,6 +623,7 @@ class ChatBotAPI:
                     )
                 except Exception as e:
                     print(e)
+                    return False
 
                 self.azure_endpoint     = azure_endpoint
                 self.azure_version      = azure_version
@@ -678,6 +680,8 @@ class ChatBotAPI:
         text = text.replace('!\n」','!」')
         text = text.replace('!\n"' ,'!"')
         text = text.replace("!\n'" ,"!'")
+        text = text.replace("!\n=" ,"!=")
+        text = text.replace("!\n--" ,"!--")
 
         text = text.replace('\n \n ' ,'\n')
         text = text.replace('\n \n' ,'\n')
@@ -696,9 +700,7 @@ class ChatBotAPI:
         res_history = history
 
         # sysText, reqText, inpText -> history
-        if (sysText is None):
-            sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
-        if (sysText.strip() != ''):
+        if (sysText is not None) and (sysText.strip() != ''):
             if (len(res_history) > 0):
                 if (sysText.strip() != res_history[0]['content'].strip()):
                     res_history = []
@@ -706,16 +708,14 @@ class ChatBotAPI:
                 self.seq += 1
                 dic = {'seq': self.seq, 'time': time.time(), 'role': 'system', 'name': '', 'content': sysText.strip() }
                 res_history.append(dic)
-        if (reqText is not None):
-            if (reqText.strip() != ''):
-                self.seq += 1
-                dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': reqText.strip() }
-                res_history.append(dic)
+        if (reqText is not None) and (reqText.strip() != ''):
+            self.seq += 1
+            dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': reqText.strip() }
+            res_history.append(dic)
         if (inpText.strip() != ''):
-            if (inpText.rstrip() != ''):
-                self.seq += 1
-                dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': inpText.rstrip() }
-                res_history.append(dic)
+            self.seq += 1
+            dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': inpText.rstrip() }
+            res_history.append(dic)
 
         return res_history
 
@@ -957,6 +957,7 @@ class ChatBotAPI:
                 sysText=None, reqText=None, inpText='こんにちは',
                 upload_files=[], image_urls=[], 
                 temperature=0.8, max_step=10, jsonMode=False, ):
+
         #self.assistant_id[str(session_id)] = None
         self.thread_id[str(session_id)] = None
         functions = []
@@ -1026,8 +1027,20 @@ class ChatBotAPI:
             inpText = inpText.strip()[7:]
             if (self.gpt_b_enable == True):
                     model_select = 'b'
+        elif (inpText.strip()[:11].lower() == ('perplexity,')):
+            inpText = inpText.strip()[11:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'b'
+        elif (inpText.strip()[:5].lower() == ('pplx,')):
+            inpText = inpText.strip()[5:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'x'
         elif (inpText.strip()[:7].lower() == ('local,')):
             inpText = inpText.strip()[7:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'a'
+        elif (inpText.strip()[:5].lower() == ('free,')):
+            inpText = inpText.strip()[5:]
             if (self.gpt_b_enable == True):
                     model_select = 'a'
 
@@ -1058,7 +1071,8 @@ class ChatBotAPI:
             stream = False
 
         # 実行ループ
-        try:
+        #try:
+        if True:
 
             n = 0
             function_name = ''
@@ -1136,7 +1150,7 @@ class ChatBotAPI:
                         completions = self.client_v.chat.completions.create(
                                 model           = res_api,
                                 messages        = msg,
-                                max_tokens      = 4000,
+                                # max_tokens      = 4000,
                                 timeout         = self.timeOut, 
                                 stream          = stream, 
                                 )
@@ -1184,7 +1198,7 @@ class ChatBotAPI:
                         completions = self.client_v.chat.completions.create(
                                 model           = res_api,
                                 messages        = msg,
-                                max_tokens      = 4000,
+                                # max_tokens      = 4000,
                                 timeout         = self.timeOut,
                                 )
 
@@ -1404,9 +1418,9 @@ class ChatBotAPI:
                 dic = {'seq': self.seq, 'time': time.time(), 'role': res_role, 'name': '', 'content': res_text }
                 res_history.append(dic)
 
-        except Exception as e:
-            print(e)
-            res_text = ''
+        #except Exception as e:
+        #    print(e)
+        #    res_text = ''
 
         return res_text, res_path, res_files, res_name, res_api, res_history
 
@@ -1787,8 +1801,14 @@ class ChatBotAPI:
             inpText = inpText.strip()[7:]
         elif (inpText.strip()[:7].lower() == ('gemini,')):
             inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:11].lower() == ('perplexity,')):
+            inpText = inpText.strip()[11:]
+        elif (inpText.strip()[:5].lower() == ('pplx,')):
+            inpText = inpText.strip()[5:]
         elif (inpText.strip()[:6].lower() == ('local,')):
             inpText = inpText.strip()[6:]
+        elif (inpText.strip()[:5].lower() == ('free,')):
+            inpText = inpText.strip()[5:]
 
         # history 追加・圧縮 (古いメッセージ)
         res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )
@@ -1929,8 +1949,9 @@ class ChatBotAPI:
         else:
             stream = False
 
-        # 実行開始
-        try:
+        # 実行開始        
+        #try:
+        if True:
             if (stream == True):
                 # 初期化
                 my_handler = my_eventHandler(log_queue=self.log_queue, my_seq=self.seq,
@@ -2235,9 +2256,9 @@ class ChatBotAPI:
                         self.print(session_id, )
                         #time.sleep(0.50)
 
-        except Exception as e:
-            print(e)
-            res_content = None
+        #except Exception as e:
+        #    print(e)
+        #    res_content = None
 
         if (exit_status is None):
             exit_status = 'timeout'
@@ -2416,30 +2437,15 @@ Respond according to the following criteria:
             n += 1
             self.print(session_id, f" Assistant : { model_name }, pass={ n }, ")
 
-            # OpenAI
-            if (self.openai_api_type != 'azure'):
-
-                # Assistant
-                res_text2, res_path2, res_files2, nick_name, model_name, res_history = \
-                    self.run_assistant(chat_class=chat_class, model_select=model_select,
-                                       nick_name=nick_name, model_name=model_name,
-                                       session_id=session_id, history=res_history, function_modules=function_modules, 
-                                       sysText=sysText, reqText=reqText, inpText=inpText,
-                                       upload_files=upload_files, image_urls=image_urls,
-                                       temperature=temperature, max_step=max_step, jsonMode=jsonMode, )
+            # Assistant
+            res_text2, res_path2, res_files2, nick_name, model_name, res_history = \
+                self.run_assistant(chat_class=chat_class, model_select=model_select,
+                                    nick_name=nick_name, model_name=model_name,
+                                    session_id=session_id, history=res_history, function_modules=function_modules, 
+                                    sysText=sysText, reqText=reqText, inpText=inpText,
+                                    upload_files=upload_files, image_urls=image_urls,
+                                    temperature=temperature, max_step=max_step, jsonMode=jsonMode, )
             
-            # Azure
-            else:
-
-                # Assistant
-                res_text2, res_path2, res_files2, nick_name, model_name, res_history = \
-                    self.run_assistant(chat_class=chat_class, model_select=model_select,
-                                       nick_name=nick_name, model_name=model_name,
-                                       session_id=session_id, history=res_history, function_modules=function_modules,
-                                       sysText=sysText, reqText=reqText, inpText=inpText,
-                                       upload_files=upload_files, image_urls=image_urls, 
-                                       temperature=temperature, max_step=max_step, jsonMode=jsonMode, )
-
             if  (res_text2 is not None) \
             and (res_text2 != '') \
             and (res_text2 != '!'):
@@ -2533,6 +2539,9 @@ Respond according to the following criteria:
         model_name      = None
         res_history     = history
 
+        if (sysText is None) or (sysText == ''):
+            sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
+
         if (self.bot_auth is None):
             self.print(session_id, 'ChatGPT: Not Authenticate Error !')
             return res_text, res_path, nick_name, model_name, res_history
@@ -2583,10 +2592,14 @@ Respond according to the following criteria:
                 chat_class = 'chat'
 
         # ChatGPT
-        if   ((chat_class != 'knowledge') \
-        and   (chat_class != 'code_interpreter') \
-        and   (chat_class != 'assistant') \
-        and   (model_select != 'x')):
+        if  ((chat_class != 'assistant') \
+        and  (chat_class != 'コード生成') \
+        and  (chat_class != 'コード実行') \
+        and  (chat_class != '文書検索') \
+        and  (chat_class != '複雑な会話') \
+        and  (chat_class != 'アシスタント') \
+        and  (model_select != 'x')):
+
             #try:
                 res_text, res_path, res_files, nick_name, model_name, res_history = \
                     self.run_gpt(chat_class=chat_class, model_select=model_select,
@@ -2773,10 +2786,11 @@ if __name__ == '__main__':
                 print('', res_text)
                 print()
 
-            if False:
+            if True:
                 sysText = None
                 reqText = ''
-                inpText = 'riki,今日は何月何日？'
+                #inpText = 'riki,今日は何月何日？'
+                inpText = 'riki,日本の主要３都市の天気？'
                 filePath = []
                 print('[Request]')
                 print(reqText, inpText )
@@ -2817,7 +2831,6 @@ if __name__ == '__main__':
                 #inpText = '計算式 123 * 456 * (7 + 8) の答え？'
                 #inpText = 'riki,東京の天気？'
                 #inpText = 'gpt4,日本の主要３都市の天気？'
-                #inpText = 'riki,日本の主要３都市の天気？'
                 inpText = 'riki,今日は何月何日？'
                 #inpText = 'riki,私のニックネームを覚えていますか？'
                 #inpText = 'riki,小説でマインは何階に住んでいますか？'

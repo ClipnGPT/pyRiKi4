@@ -15,6 +15,8 @@ import time
 
 import psutil
 
+#import PySimpleGUI_key
+#PySimpleGUI_License=PySimpleGUI_key.PySimpleGUI_License
 import PySimpleGUI as sg
 
 import platform

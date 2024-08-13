@@ -18,6 +18,8 @@ import io
 import numpy as np
 import cv2
 
+#import PySimpleGUI_key
+#PySimpleGUI_License=PySimpleGUI_key.PySimpleGUI_License
 import PySimpleGUI as sg
 
 from PIL import Image, ImageDraw, ImageFont

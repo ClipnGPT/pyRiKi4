@@ -8,7 +8,7 @@ REM ------------------------------------------------
 
 cd ".."
 
-ECHO;
+ECHO; ÉèÅ[ÉNçÌèú
 IF EXIST "build"        RD "build"        /s /q
 IF EXIST "dist"         RD "dist"         /s /q
 IF EXIST "__pycache__"  RD "__pycache__"  /s /q

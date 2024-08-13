@@ -16,16 +16,15 @@ import datetime
 import codecs
 import shutil
 
-import base64
 import json
-
 import queue
+import base64
 
+
+
+# anthropic(claude) チャットボット
 import anthropic
 
-
-
-# claude チャットボット
 import speech_bot_claude_key  as claude_key
 
 
@@ -122,6 +121,7 @@ class _claudeAPI:
 
         # 認証
         self.bot_auth                 = None
+        self.claude_key_id            = claude_key_id
 
         self.claude_default_gpt       = claude_default_gpt
         self.claude_default_class     = claude_default_class
@@ -159,6 +159,8 @@ class _claudeAPI:
 
         # API-KEYの設定
         self.client = None
+        if (claude_key_id[:1] == '<'):
+            return False
         try:
             self.client = anthropic.Anthropic(
                 # defaults to os.environ.get("ANTHROPIC_API_KEY")
@@ -212,6 +214,8 @@ class _claudeAPI:
         text = text.replace('!\n」','!」')
         text = text.replace('!\n"' ,'!"')
         text = text.replace("!\n'" ,"!'")
+        text = text.replace("!\n=" ,"!=")
+        text = text.replace("!\n--" ,"!--")
 
         text = text.replace('\n \n ' ,'\n')
         text = text.replace('\n \n' ,'\n')
@@ -230,9 +234,7 @@ class _claudeAPI:
         res_history = history
 
         # sysText, reqText, inpText -> history
-        if (sysText is None):
-            sysText = 'あなたは教師のように話す賢いアシスタントです。'
-        if (sysText.strip() != ''):
+        if (sysText is not None) and (sysText.strip() != ''):
             if (len(res_history) > 0):
                 if (sysText.strip() != res_history[0]['content'].strip()):
                     res_history = []
@@ -240,16 +242,14 @@ class _claudeAPI:
                 self.seq += 1
                 dic = {'seq': self.seq, 'time': time.time(), 'role': 'system', 'name': '', 'content': sysText.strip() }
                 res_history.append(dic)
-        if (reqText is not None):
-            if (reqText.strip() != ''):
-                self.seq += 1
-                dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': reqText.strip() }
-                res_history.append(dic)
+        if (reqText is not None) and (reqText.strip() != ''):
+            self.seq += 1
+            dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': reqText.strip() }
+            res_history.append(dic)
         if (inpText.strip() != ''):
-            if (inpText.rstrip() != ''):
-                self.seq += 1
-                dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': inpText.rstrip() }
-                res_history.append(dic)
+            self.seq += 1
+            dic = {'seq': self.seq, 'time': time.time(), 'role': 'user', 'name': '', 'content': inpText.rstrip() }
+            res_history.append(dic)
 
         return res_history
 
@@ -277,6 +277,32 @@ class _claudeAPI:
 
         return res_history
 
+    def history2msg_text(self, history=[], ):
+        # 過去メッセージ追加
+        msg_text = ''
+        if (len(history) > 2):
+            msg_text += "''' これは過去の会話履歴です。\n"
+            for m in range(len(history) - 2):
+                role    = history[m+1].get('role','')
+                content = history[m+1].get('content','')
+                name    = history[m+1].get('name','')
+                if (role != 'system'):
+                    # 全てユーザーメッセージにて処理
+                    if (name is None) or (name == ''):
+                        msg_text += '(' + role + ')' + '\n' + content + '\n'
+                    else:
+                        if (role == 'function_call'):
+                            msg_text += '(function ' + name + ' call)'  + '\n' + content + '\n'
+                        else:
+                            msg_text += '(function ' + name + ' result) ' + '\n' + content + '\n'
+            msg_text += "''' 会話履歴はここまでです。\n"
+            msg_text += "\n"
+        m = len(history) - 1
+        msg_text += history[m].get('content', '')
+        #print(msg_text)
+
+        return msg_text
+
 
 
     def files_check(self, filePath=[], ):
@@ -289,7 +315,8 @@ class _claudeAPI:
 
                 for file_name in filePath:
                     if (os.path.isfile(file_name)):
-                        if (os.path.getsize(file_name) <= 20000000):
+                        # 2024/06/26 時点 max 10Mbyte 
+                        if (os.path.getsize(file_name) <= 10000000):
 
                             upload_files.append(file_name)
                             file_ext = os.path.splitext(file_name)[1][1:].lower()
@@ -318,9 +345,6 @@ class _claudeAPI:
                 upload_files=[], image_urls=[], 
                 temperature=0.8, max_step=10, jsonMode=False, ):
 
-        if (sysText is None):
-            sysText = 'あなたは教師のように話す賢いアシスタントです。'
-
         # 戻り値
         res_text        = ''
         res_path        = ''
@@ -333,17 +357,22 @@ class _claudeAPI:
             self.print(session_id, ' claude  : Not Authenticate Error !')
             return res_text, res_path, res_name, res_api, res_history
 
-        # チャットクラス確認
+        # モデル 設定
         res_name = self.claude_a_nick_name
         res_api  = self.claude_a_model
         if  (chat_class == 'claude'):
             if (self.claude_b_enable == True):
                 res_name = self.claude_b_nick_name
                 res_api  = self.claude_b_model
-        if  (chat_class == 'knowledge') \
-        or  (chat_class == 'code_interpreter') \
-        or  (chat_class == 'assistant') \
-        or  (model_select == 'x'):
+
+        # モデル 補正 (assistant)
+        if ((chat_class == 'assistant') \
+        or  (chat_class == 'コード生成') \
+        or  (chat_class == 'コード実行') \
+        or  (chat_class == '文書検索') \
+        or  (chat_class == '複雑な会話') \
+        or  (chat_class == 'アシスタント') \
+        or  (model_select == 'x')):
             if (self.claude_x_enable == True):
                 res_name = self.claude_x_nick_name
                 res_api  = self.claude_x_model
@@ -358,17 +387,24 @@ class _claudeAPI:
                 if   (self.claude_b_enable == True):
                         res_name = self.claude_b_nick_name
                         res_api  = self.claude_b_model
+
         if (self.claude_v_nick_name != ''):
             if (inpText.strip()[:len(self.claude_v_nick_name)+1].lower() == (self.claude_v_nick_name.lower() + ',')):
                 inpText = inpText.strip()[len(self.claude_v_nick_name)+1:]
+                #if   (self.claude_v_enable == True):
+                #    if  (len(image_urls) > 0) \
+                #    and (len(image_urls) == len(upload_files)):
+                #        res_name = self.claude_v_nick_name
+                #        res_api  = self.claude_v_model
+                #elif (self.claude_x_enable == True):
+                #        res_name = self.claude_x_nick_name
+                #        res_api  = self.claude_x_model
+                # 2024/08/04 特別補正 ちなみに 3.5はsonnet,opusしかない！ 
                 if   (self.claude_v_enable == True):
-                    if  (len(image_urls) > 0) \
-                    and (len(image_urls) == len(upload_files)):
-                        res_name = self.claude_v_nick_name
-                        res_api  = self.claude_v_model
-                elif (self.claude_x_enable == True):
-                        res_name = self.claude_x_nick_name
-                        res_api  = self.claude_x_model
+                    res_name = self.claude_v_nick_name
+                    res_api  = self.claude_v_model
+                    print('Cloudeが選択されましたがAPI利用不可のためconfigでsonnet利用に変更中！')
+
         if (self.claude_x_nick_name != ''):
             if (inpText.strip()[:len(self.claude_x_nick_name)+1].lower() == (self.claude_x_nick_name.lower() + ',')):
                 inpText = inpText.strip()[len(self.claude_x_nick_name)+1:]
@@ -398,19 +434,25 @@ class _claudeAPI:
                         res_api  = self.claude_x_model
         elif (inpText.strip()[:10].lower() == ('assistant,')):
             inpText = inpText.strip()[10:]
-            if (self.claude_b_enable == True):
-                        res_name = self.claude_b_nick_name
-                        res_api  = self.claude_b_model
+            if (self.claude_x_enable == True):
+                        res_name = self.claude_x_nick_name
+                        res_api  = self.claude_x_model
         elif (inpText.strip()[:7].lower() == ('openai,')):
             inpText = inpText.strip()[7:]
         elif (inpText.strip()[:7].lower() == ('claude,')):
             inpText = inpText.strip()[7:]
         elif (inpText.strip()[:7].lower() == ('gemini,')):
             inpText = inpText.strip()[7:]
+        elif (inpText.strip()[:11].lower() == ('perplexity,')):
+            inpText = inpText.strip()[11:]
+        elif (inpText.strip()[:5].lower() == ('pplx,')):
+            inpText = inpText.strip()[5:]
         elif (inpText.strip()[:6].lower() == ('local,')):
             inpText = inpText.strip()[6:]
+        elif (inpText.strip()[:5].lower() == ('free,')):
+            inpText = inpText.strip()[5:]
 
-        # モデル
+        # モデル 未設定時
         if (res_api is None):
             res_name = self.claude_a_nick_name
             res_api  = self.claude_a_model
@@ -420,7 +462,7 @@ class _claudeAPI:
                     res_name = self.claude_b_nick_name
                     res_api  = self.claude_b_model
 
-        # モデル補正
+        # モデル 補正 (vision)
         if  (len(image_urls) > 0) \
         and (len(image_urls) == len(upload_files)):
             if   (self.claude_v_enable == True):
@@ -434,25 +476,8 @@ class _claudeAPI:
         res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )
         res_history = self.history_zip1(history=res_history, )
 
-        # 過去メッセージ追加
-        msg_text = ''
-        if (len(res_history) > 2):
-            msg_text += "''' これは過去の会話履歴です。\n"
-            for m in range(len(res_history) - 2):
-                role    = res_history[m+1].get('role','')
-                content = res_history[m+1].get('content','')
-                name    = res_history[m+1].get('name','')
-                if (role != 'system'):
-                    # 全てユーザーメッセージにて処理
-                    if (name is None) or (name == ''):
-                        msg_text += '(' + role + ')' + '\n' + content + '\n'
-                    else:
-                        if (role == 'function_call'):
-                            msg_text += '(function ' + name + ' call)'  + '\n' + content + '\n'
-                        else:
-                            msg_text += '(function ' + name + ' result) ' + '\n' + content + '\n'
-            msg_text += "''' 会話履歴はここまでです。\n"
-            msg_text += "\n"
+        # メッセージ作成
+        msg_text = self.history2msg_text(history=res_history, )
 
         # tools
         tools = []
@@ -462,12 +487,6 @@ class _claudeAPI:
             func_str = func_str.replace('"parameters"', '"input_schema"')
             func     = json.loads(func_str)
             tools.append(func)
-
-        # 送信データ
-        if (len(res_history) <= 2):
-            if (reqText is not None) and (reqText != ''):
-                msg_text += reqText + '\n'
-        msg_text += inpText
 
         # 送信データ 画像無し
         messages = []
@@ -521,8 +540,8 @@ class _claudeAPI:
 
                     chkTime = time.time()
                     with self.client.messages.stream(   model=res_api, 
-                                                        max_tokens=1000,
-                                                        temperature=0,
+                                                        max_tokens=4096,
+                                                        temperature=temperature,
                                                         system=sysText,
                                                         messages=messages,
                                                         tools=tools, ) as streams:
@@ -570,8 +589,8 @@ class _claudeAPI:
                 # 通常実行
                 if (stream == False):
                     response = self.client.messages.create( model=res_api, 
-                                                            max_tokens=1000,
-                                                            temperature=0,
+                                                            max_tokens=4096,
+                                                            temperature=temperature,
                                                             system=sysText,
                                                             messages=messages,
                                                             tools=tools, )
@@ -707,6 +726,9 @@ class _claudeAPI:
         model_name  = None
         res_history = history
 
+        if (sysText is None) or (sysText == ''):
+            sysText = 'あなたは教師のように話す賢いアシスタントです。'
+
         if (self.bot_auth is None):
             self.print(session_id, ' claude : Not Authenticate Error !')
             return res_text, res_path, nick_name, model_name, res_history
@@ -789,8 +811,9 @@ if __name__ == '__main__':
                 sysText = None
                 reqText = ''
                 #inpText = 'おはようございます。'
-                inpText = '今日は、何月何日？'
+                #inpText = '今日は、何月何日？'
                 #inpText = '日本の３大都市の天気？'
+                inpText = 'claude,おはようございます。'
                 print()
                 print('[Request]')
                 print(reqText, inpText )

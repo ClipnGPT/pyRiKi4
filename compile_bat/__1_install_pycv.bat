@@ -8,6 +8,12 @@ REM ------------------------------------------------
 
 REM CALL __setpath.bat
 
+ECHO; ÉèÅ[ÉNçÌèú
+IF EXIST "build"        RD "build"        /s /q
+IF EXIST "dist"         RD "dist"         /s /q
+IF EXIST "__pycache__"  RD "__pycache__"  /s /q
+PAUSE
+
 ECHO;
 ECHO ----------
 ECHO 2024/02/12
@@ -57,14 +63,15 @@ ECHO -------
     python -m pip  install --upgrade screeninfo
     python -m pip  install --upgrade pyautogui
     python -m pip  install --upgrade pywin32
+    python -m pip  install --upgrade comtypes
     python -m pip  install --upgrade psutil
     python -m pip  install --upgrade rainbow-logging-handler
     python -m pip  install --upgrade pycryptodome
 
     python -m pip  install --upgrade matplotlib
-    python -m pip  install --upgrade pysimplegui==4.60.5
+    python -m pip  install --upgrade pysimplegui
     python -m pip  install --upgrade pykakasi
-rem ‚Üì use vs code
+rem Å´ use vs code
     python -m pip  install --upgrade pylint
 
 ECHO;
