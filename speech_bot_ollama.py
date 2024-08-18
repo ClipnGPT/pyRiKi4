@@ -291,6 +291,7 @@ class _ollamaAPI:
         text = text.replace('!\n"' ,'!"')
         text = text.replace("!\n'" ,"!'")
         text = text.replace("!\n=" ,"!=")
+        text = text.replace("!\n--" ,"!--")
 
         text = text.replace('\n \n ' ,'\n')
         text = text.replace('\n \n' ,'\n')
@@ -519,6 +520,10 @@ class _ollamaAPI:
             inpText = inpText.strip()[5:]
         elif (inpText.strip()[:6].lower() == ('local,')):
             inpText = inpText.strip()[6:]
+        elif (inpText.strip()[:5].lower() == ('free,')):
+            inpText = inpText.strip()[5:]
+        elif (inpText.strip()[:6].lower() == ('plamo,')):
+            inpText = inpText.strip()[6:]
 
         # モデル 未設定時
         if (res_api is None):
@@ -678,7 +683,7 @@ class _ollamaAPI:
         model_name  = None
         res_history = history
 
-        if (sysText is None):
+        if (sysText is None) or (sysText == ''):
             sysText = 'あなたは美しい日本語を話す賢いアシスタントです。'
 
         if (self.bot_auth is None):

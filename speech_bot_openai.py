@@ -1043,6 +1043,10 @@ class ChatBotAPI:
             inpText = inpText.strip()[5:]
             if (self.gpt_b_enable == True):
                     model_select = 'a'
+        elif (inpText.strip()[:6].lower() == ('plamo,')):
+            inpText = inpText.strip()[6:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'a'
 
         # Vision ?
         if (model_select == 'auto'):
@@ -1809,6 +1813,8 @@ class ChatBotAPI:
             inpText = inpText.strip()[6:]
         elif (inpText.strip()[:5].lower() == ('free,')):
             inpText = inpText.strip()[5:]
+        elif (inpText.strip()[:6].lower() == ('plamo,')):
+            inpText = inpText.strip()[6:]
 
         # history 追加・圧縮 (古いメッセージ)
         res_history = self.history_add(history=res_history, sysText=sysText, reqText=reqText, inpText=inpText, )

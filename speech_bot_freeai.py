@@ -462,6 +462,8 @@ class _freeaiAPI:
             inpText = inpText.strip()[6:]
         elif (inpText.strip()[:5].lower() == ('free,')):
             inpText = inpText.strip()[5:]
+        elif (inpText.strip()[:6].lower() == ('plamo,')):
+            inpText = inpText.strip()[6:]
 
         # モデル 未設定時
         if (res_api is None):
@@ -531,14 +533,12 @@ class _freeaiAPI:
                         self.print(session_id, ' FreeAI  : Upload complete.')
                         req_files.append(upload_obj)
 
-        # ***free特別処理*** tools未対応
+        # ***free特別処理*** tools未対応?
         tools = []
         if True:
 
             # tools
-            #tools = []
-            tools = [{"name":'code_execution'}]
-            #tools = ['code_execution']
+            #tools = [{"name":'code_execution'}]
             for module_dic in function_modules:
                 func_dic = module_dic['function']
                 func_str = json.dumps(func_dic, ensure_ascii=False, )

@@ -462,6 +462,8 @@ class _geminiAPI:
             inpText = inpText.strip()[6:]
         elif (inpText.strip()[:5].lower() == ('free,')):
             inpText = inpText.strip()[5:]
+        elif (inpText.strip()[:6].lower() == ('plamo,')):
+            inpText = inpText.strip()[6:]
 
         # モデル 未設定時
         if (res_api is None):
@@ -530,17 +532,19 @@ class _geminiAPI:
                         req_files.append(upload_obj)
 
         # tools
-        #tools = []
-        tools = [{"name":'code_execution'}]
-        #tools = ['code_execution']
-        for module_dic in function_modules:
-            func_dic = module_dic['function']
-            func_str = json.dumps(func_dic, ensure_ascii=False, )
-            func_str = func_str.replace('"type"', '"type_"')
-            func_str = func_str.replace('"object"', '"OBJECT"')
-            func_str = func_str.replace('"string"', '"STRING"')
-            func     = json.loads(func_str)
-            tools.append(func)
+        tools = []
+        if True:
+
+            # tools
+            #tools = [{"name":'code_execution'}]
+            for module_dic in function_modules:
+                func_dic = module_dic['function']
+                func_str = json.dumps(func_dic, ensure_ascii=False, )
+                func_str = func_str.replace('"type"', '"type_"')
+                func_str = func_str.replace('"object"', '"OBJECT"')
+                func_str = func_str.replace('"string"', '"STRING"')
+                func     = json.loads(func_str)
+                tools.append(func)
 
         # gemini 設定
         if (jsonMode != True):
