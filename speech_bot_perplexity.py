@@ -656,8 +656,27 @@ if __name__ == '__main__':
                 sysText = None
                 reqText = ''
                 #inpText = 'おはようございます。'
+                inpText = 'soner,おはようございます。'
+                print()
+                print('[Request]')
+                print(reqText, inpText )
+                print()
+                res_text, res_path, res_files, res_name, res_api, perplexityAPI.history = \
+                    perplexityAPI.chatBot(  chat_class='auto', model_select='auto', 
+                                            session_id='admin', history=perplexityAPI.history, function_modules=function_modules,
+                                            sysText=sysText, reqText=reqText, inpText=inpText, filePath=filePath,
+                                            inpLang='ja', outLang='ja', )
+                print()
+                print(f"[{ res_name }] ({ res_api })")
+                print(str(res_text))
+                print()
+
+            if True:
+                sysText = None
+                reqText = ''
+                #inpText = 'おはようございます。'
                 #inpText = 'pplx,おはようございます。'
-                inpText = 'pplx,株式会社A-ZiPを調べて！'
+                inpText = 'pplx,株式会社三光システムの姫路の住所？'
                 print()
                 print('[Request]')
                 print(reqText, inpText )
