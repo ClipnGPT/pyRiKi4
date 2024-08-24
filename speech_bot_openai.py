@@ -1035,7 +1035,15 @@ class ChatBotAPI:
             inpText = inpText.strip()[5:]
             if (self.gpt_b_enable == True):
                     model_select = 'x'
-        elif (inpText.strip()[:7].lower() == ('local,')):
+        elif (inpText.strip()[:7].lower() == ('ollama,')):
+            inpText = inpText.strip()[7:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'a'
+        elif (inpText.strip()[:6].lower() == ('local,')):
+            inpText = inpText.strip()[6:]
+            if (self.gpt_b_enable == True):
+                    model_select = 'a'
+        elif (inpText.strip()[:7].lower() == ('freeai,')):
             inpText = inpText.strip()[7:]
             if (self.gpt_b_enable == True):
                     model_select = 'a'
@@ -1809,8 +1817,12 @@ class ChatBotAPI:
             inpText = inpText.strip()[11:]
         elif (inpText.strip()[:5].lower() == ('pplx,')):
             inpText = inpText.strip()[5:]
+        elif (inpText.strip()[:7].lower() == ('ollama,')):
+            inpText = inpText.strip()[7:]
         elif (inpText.strip()[:6].lower() == ('local,')):
             inpText = inpText.strip()[6:]
+        elif (inpText.strip()[:7].lower() == ('freeai,')):
+            inpText = inpText.strip()[7:]
         elif (inpText.strip()[:5].lower() == ('free,')):
             inpText = inpText.strip()[5:]
         elif (inpText.strip()[:6].lower() == ('plamo,')):
